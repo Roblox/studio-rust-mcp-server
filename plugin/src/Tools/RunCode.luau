@@ -1,4 +1,3 @@
---!strict
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
 local Types = require(Main.Types)
 

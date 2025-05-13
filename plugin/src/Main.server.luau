@@ -1,4 +1,3 @@
---!strict
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
 local MockWebSocketService = require(Main.MockWebSocketService)
 local Types = require(Main.Types)
