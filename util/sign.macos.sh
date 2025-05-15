@@ -1,5 +1,7 @@
 #!/bin/bash
-set -e
+set -ex
+
+BUNDLE_DIR=target/aarch64-apple-darwin/release/bundle
 
 if [ -n "$APPLE_API_KEY_CONTENT" ]
 then
@@ -21,7 +23,6 @@ then
     IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | cut -d' ' -f4 | tail -1)
     echo "$APPLE_API_KEY_CONTENT" > "$APPLE_API_KEY"
 
-    BUNDLE_DIR=target/aarch64-apple-darwin/release/bundle
     
     codesign -s "$IDENTITY" -v -f -o runtime --deep -i com.rbx-mcp.server --timestamp --entitlements util/App.entitlements --generate-entitlement-der "$BUNDLE_DIR/osx/Roblox Studio MCP.app"
     ditto -c -k $BUNDLE_DIR/osx $BUNDLE_DIR/bund.zip
