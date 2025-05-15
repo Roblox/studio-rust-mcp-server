@@ -183,5 +183,6 @@ pub async fn install() -> Result<()> {
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub async fn install() -> Result<()> {
-    install_internal().await
+    install_internal().await?;
+    Ok(())
 }
