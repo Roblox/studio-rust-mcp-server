@@ -24,10 +24,10 @@ then
     echo "$APPLE_API_KEY_CONTENT" > "$APPLE_API_KEY"
 
     
-    codesign -s "$IDENTITY" -v -f -o runtime --deep -i com.rbx-mcp.server --timestamp --entitlements util/App.entitlements --generate-entitlement-der "$BUNDLE_DIR/osx/Roblox Studio MCP.app"
+    codesign -s "$IDENTITY" -v -f -o runtime --deep -i com.rbx-mcp.server --timestamp --entitlements util/App.entitlements --generate-entitlement-der "$BUNDLE_DIR/osx/RobloxStudioMCP.app"
     ditto -c -k $BUNDLE_DIR/osx $BUNDLE_DIR/bund.zip
     xcrun notarytool submit -k "$APPLE_API_KEY" -d "$APPLE_API_KEY_ID" -i "$APPLE_API_ISSUER" --wait --progress $BUNDLE_DIR/bund.zip
-    xcrun stapler staple "$BUNDLE_DIR/osx/Roblox Studio MCP.app"
+    xcrun stapler staple "$BUNDLE_DIR/osx/RobloxStudioMCP.app"
 fi
 
 ditto -c -k $BUNDLE_DIR/osx output/macOS-rbx-studio-mcp.zip

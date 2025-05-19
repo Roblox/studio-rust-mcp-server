@@ -28,6 +28,6 @@ core-foundation = "0.10.0"
 rojo = "7.4.4"
 
 [package.metadata.bundle]
-name = "Roblox Studio MCP"
+name = "RobloxStudioMCP"
 description = "Model Context Protocol server for Roblox Studio"
 identifier = "com.rbx-mcp.server"
