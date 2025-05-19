@@ -22,7 +22,7 @@ jobs:
           rustup target add x86_64-apple-darwin aarch64-apple-darwin
           cargo build --release --target aarch64-apple-darwin  --target x86_64-apple-darwin
           cargo bundle --release --target aarch64-apple-darwin
-          lipo -create target/aarch64-apple-darwin/release/rbx-studio-mcp target/x86_64-apple-darwin/release/rbx-studio-mcp -output "target/aarch64-apple-darwin/release/bundle/osx/Roblox Studio MCP.app/Contents/MacOS/rbx-studio-mcp"
+          lipo -create target/aarch64-apple-darwin/release/rbx-studio-mcp target/x86_64-apple-darwin/release/rbx-studio-mcp -output "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"
       - name: Sign and Notarize macOS binary
         run: ./util/sign.macos.sh
         env:
