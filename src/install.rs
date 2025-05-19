@@ -131,9 +131,8 @@ async fn install_internal() -> Result<String> {
     let this_exe = get_exe_path()?;
 
     let mut errors = vec![];
-    let claude_config_path = get_claude_config();
     let results = vec![
-        install_to_config(claude_config_path, &this_exe, "Claude"),
+        install_to_config(get_claude_config(), &this_exe, "Claude"),
         install_to_config(get_cursor_config(), &this_exe, "Cursor"),
     ];
 
