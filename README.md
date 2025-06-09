@@ -39,7 +39,7 @@ To set up the reference implementation:
 To build and install the MCP reference implementation from this repository's source code:
 
 1. Ensure you have [Roblox Studio](https://create.roblox.com/docs/en-us/studio/setup) and
-   [Claude Desktop](https://claude.ai/download)) installed and started at least once.
+   [Claude Desktop](https://claude.ai/download) installed and started at least once.
 1. Exit Claude and Roblox Studio if they are running.
 1. [Install](https://www.rust-lang.org/tools/install) Rust.
 1. Download or clone this repository.
