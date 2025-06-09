@@ -1,7 +1,7 @@
 # Roblox Studio MCP Server
 
 This repository contains a reference implementation of the Model Context Protocol (MCP) that enables
-communication between Roblox Studio via a plugin and [Claude Desktop](https://claude.ai/download).
+communication between Roblox Studio via a plugin and [Claude Desktop](https://claude.ai/download) or [Cursor](https://www.cursor.com/).
 It consists of the following Rust-based components, which communicate through internal shared
 objects.
 
@@ -23,16 +23,37 @@ The setup process also contains a short plugin installation and Claude Desktop c
 
 ### Install with release binaries
 
-To set up the reference implementation:
+This MCP Server supports pretty much any MCP Client but will automatically set up only [Claude Desktop](https://claude.ai/download) and [Cursor](https://www.cursor.com/) if found.
 
-1. Ensure you have [Roblox Studio](https://create.roblox.com/docs/en-us/studio/setup)
-   and [Claude Desktop](https://claude.ai/download) installed and started at least once.
-1. Exit Claude and Roblox Studio if they are running.
+To set up automatically:
+
+1. Ensure you have [Roblox Studio](https://create.roblox.com/docs/en-us/studio/setup),
+   and [Claude Desktop](https://claude.ai/download)/[Cursor](https://www.cursor.com/) installed and started at least once.
+1. Exit MCP Clients and Roblox Studio if they are running.
 1. Download and run the installer:
    1. Go to the [releases](https://github.com/Roblox/studio-rust-mcp-server/releases) page and
       download the latest release for your platform.
    1. Unzip the downloaded file if necessary and run the installer.
-   1. Restart Claude and Roblox Studio if they are running.
+   1. Restart Claude/Cursor and Roblox Studio if they are running.
+
+### Setting up manually
+
+To set up manually add following to your MCP Client config:
+
+```json
+{
+  "mcpServers": {
+    "Roblox Studio": {
+      "args": [
+        "--stdio"
+      ],
+      "command": "Path-to-downloaded\\rbx-studio-mcp.exe"
+    }
+  }
+}
+```
+
+On macOS the path would be something like `"/Applications/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"` if you move the app to the Applications directory.
 
 ### Build from source
 
