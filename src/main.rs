@@ -25,11 +25,16 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("warn")) // Default to WARN for other crates if RUST_LOG is not set
+        .add_directive("rbx_studio_mcp=info".parse().expect("Failed to parse rbx_studio_mcp directive"))
+        .add_directive("mcp_server=info".parse().expect("Failed to parse mcp_server directive")); // For our custom targets
+
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(io::stderr)
-        .with_target(false)
-        .with_thread_ids(true)
+        .with_env_filter(filter)
+        .with_writer(io::stderr) // Keep directing to stderr
+        .with_target(true)       // Enable printing of log targets
+        .with_thread_ids(true)   // Keep thread IDs if they were there
         .init();
 
     let args = Args::parse();

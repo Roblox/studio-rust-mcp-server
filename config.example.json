@@ -1,0 +1,8 @@
+{
+    "GEMINI_MODEL_NAME": "gemini-1.5-flash-latest",
+    "RBX_MCP_SERVER_PATH": "./target/release/rbx-studio-mcp",
+    "GEMINI_API_KEY": null,
+    "MCP_MAX_INITIAL_START_ATTEMPTS": 3,
+    "MCP_RECONNECT_ATTEMPTS": 5,
+    "HISTORY_FILE_PATH": "~/.roblox_agent_history"
+}
