@@ -4,3 +4,15 @@ target/
 .idea/
 .vs/
 output/
+
+# Python virtual environment
+venv/
+*.venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Environment variables file
+*.env
+config.json

@@ -65,6 +65,15 @@ function MockWebSocketClient.new(uri: string): MockWebSocketClient
 end
 
 local function doRequest(url: string, method: "GET" | "POST", body: any)
+	local requestBody
+	if type(body) == "string" then
+		requestBody = body -- Use string body directly
+	elseif body then
+		requestBody = HttpService:JSONEncode(body) -- Encode if not already a string (and not nil)
+	else
+		requestBody = nil
+	end
+
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
 			Url = url,
@@ -72,7 +81,7 @@ local function doRequest(url: string, method: "GET" | "POST", body: any)
 			Headers = {
 				["Content-Type"] = "application/json",
 			},
-			Body = if body then HttpService:JSONEncode(body) else nil,
+			Body = requestBody, -- Use the processed requestBody
 			Compress = Enum.HttpCompression.None,
 		})
 	end)

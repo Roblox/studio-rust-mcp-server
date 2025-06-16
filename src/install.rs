@@ -1,5 +1,4 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
-use color_eyre::Help;
 use roblox_install::RobloxStudio;
 use serde_json::{json, Value};
 use std::fs::File;
@@ -7,18 +6,39 @@ use std::io::BufReader;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::vec;
 use std::{env, fs, io};
 
-fn get_message(successes: String) -> String {
-    format!("Roblox Studio MCP is ready to go.
-Please restart Studio and MCP clients to apply the changes.
+// Original get_message, renamed:
+fn get_message_claude_cursor(successes: String) -> String {
+    format!(
+        "Roblox Studio MCP is ready to go for integration with configured AI clients.
+        Please restart Studio and any MCP clients (like Claude/Cursor) to apply the changes.
 
-MCP Clients set up:
-{successes}
+        MCP Clients successfully configured:
+        {}
 
-Note: connecting a third-party LLM to Roblox Studio via an MCP server will share your data with that external service provider. Please review their privacy practices carefully before proceeding.
-To uninstall, delete the MCPStudioPlugin.rbxm from your Plugins directory.")
+        Note: Connecting a third-party LLM to Roblox Studio via an MCP server will share your data with that external service provider. \
+        Please review their privacy practices carefully before proceeding.
+        To uninstall, delete MCPStudioPlugin.rbxm from your Plugins directory and remove entries from client configurations.",
+        successes
+    )
+}
+
+// New message function for gemini_python_broker mode:
+fn get_message_gemini_python_broker() -> String {
+    format!(
+        "Roblox Studio MCP (Gemini Python Broker Mode) is set up!
+        The necessary Roblox Studio plugin (MCPStudioPlugin.rbxm) has been installed.
+
+        To use the Gemini AI capabilities with Roblox Studio:
+        1. Ensure you have Python installed.
+        2. Run the `setup_venv.bat` script once to create a Python virtual environment and install dependencies.
+        3. Use the `run_agent.bat` script to start the Python-based Gemini agent.
+        4. The `run_rust_server.bat` script can be used to start the MCP server that communicates with Roblox Studio (if not already started by another process or if you need to run it manually).
+
+        The Python agent will connect to this MCP server to interact with Roblox Studio.
+        To uninstall, delete MCPStudioPlugin.rbxm from your Plugins directory."
+    )
 }
 
 // returns OS dependant claude_desktop_config.json path
@@ -71,17 +91,35 @@ pub fn install_to_config<'a>(
     name: &'a str,
 ) -> Result<&'a str> {
     let config_path = config_path?;
+
+    // 1. Ensure parent directory exists
+    if let Some(parent_dir) = config_path.parent() {
+        if !parent_dir.exists() {
+            fs::create_dir_all(parent_dir).map_err(|e| {
+                eyre!("Could not create parent directory {parent_dir:?} for {name} config: {e:#?}", parent_dir = parent_dir.display(), name = name)
+            })?;
+            println!("INFO: Created parent directory {} for {} configuration.", parent_dir.display(), name);
+        }
+    }
+
     let mut config: serde_json::Map<String, Value> = {
         if !config_path.exists() {
             let mut file = File::create(&config_path).map_err(|e| {
-                eyre!("Could not create {name} config file at {config_path:?}: {e:#?}")
+                eyre!("Could not create {name} config file at {config_path}: {e:#?}", config_path = config_path.display(), name = name)
             })?;
+            // Initialize with an empty JSON object {}
             file.write_all(serde_json::to_string(&serde_json::Map::new())?.as_bytes())?;
+            println!("INFO: Created empty config file for {} at {}.", name, config_path.display());
         }
+
         let config_file = File::open(&config_path)
-            .map_err(|error| eyre!("Could not read or create {name} config file: {error:#?}"))?;
+            .map_err(|error| eyre!("Could not open {name} config file at {config_path}: {error:#?}", name = name, config_path = config_path.display()))?;
         let reader = BufReader::new(config_file);
-        serde_json::from_reader(reader)?
+
+        // 2. Enhance JSON parsing error context
+        serde_json::from_reader(reader).map_err(|e| {
+            eyre!("Could not parse JSON from {name} config file at {config_path}: {e:#?}", name = name, config_path = config_path.display())
+        })?
     };
 
     if !matches!(config.get("mcpServers"), Some(Value::Object(_))) {
@@ -89,70 +127,88 @@ pub fn install_to_config<'a>(
     }
 
     config["mcpServers"]["Roblox Studio"] = json!({
-      "command": &exe_path,
+      "command": exe_path, // Corrected: exe_path is already &Path
       "args": [
         "--stdio"
       ]
     });
 
-    let mut file = File::create(&config_path)?;
+    // Re-open for writing (truncate) - this also benefits from parent dir creation
+    let mut file = File::create(&config_path).map_err(|e| {
+        eyre!("Could not open {name} config file for writing at {config_path}: {e:#?}", name = name, config_path = config_path.display())
+    })?;
     file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
-        .map_err(|e| eyre!("Could not write to {name} config file at {config_path:?}: {e:#?}"))?;
+        .map_err(|e| eyre!("Could not write to {name} config file at {config_path}: {e:#?}", name = name, config_path = config_path.display()))?;
 
-    println!("Installed MCP Studio plugin to {name} config {config_path:?}");
+    // 3. Update success println message
+    println!("INFO: Successfully configured {} to use this Roblox Studio MCP server. Details in {}.", name, config_path.display());
 
     Ok(name)
 }
 
 async fn install_internal() -> Result<String> {
+    // Part 1: Install MCPStudioPlugin.rbxm (Always runs)
     let plugin_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/MCPStudioPlugin.rbxm"));
     let studio = RobloxStudio::locate()?;
-    let plugins = studio.plugins_path();
-    if let Err(err) = fs::create_dir(plugins) {
-        if err.kind() != io::ErrorKind::AlreadyExists {
-            return Err(err.into());
-        }
+    let plugins_dir_path = studio.plugins_path(); // Renamed for clarity from 'plugins'
+    if let Err(err) = fs::create_dir_all(&plugins_dir_path) { // Ensure parent dir for plugins exists
+        // Note: create_dir_all doesn't error if path already exists and is a directory.
+        // We only need to check if it's NOT ErrorKind::AlreadyExists if we were using fs::create_dir
+        // For create_dir_all, any error is problematic.
+        return Err(err).wrap_err("Failed to create Roblox Studio plugins directory");
     }
-    let output_plugin = Path::new(&plugins).join("MCPStudioPlugin.rbxm");
+    let output_plugin_path = plugins_dir_path.join("MCPStudioPlugin.rbxm"); // Renamed for clarity
     {
-        let mut file = File::create(&output_plugin).wrap_err_with(|| {
+        let mut file = File::create(&output_plugin_path).wrap_err_with(|| {
             format!(
-                "Could write Roblox Plugin file at {}",
-                output_plugin.display()
+                "Could not write Roblox Plugin file at {}",
+                output_plugin_path.display()
             )
         })?;
         file.write_all(plugin_bytes)?;
     }
     println!(
-        "Installed Roblox Studio plugin to {}",
-        output_plugin.display()
+        "INFO: Installed Roblox Studio plugin to {}",
+        output_plugin_path.display()
     );
 
-    let this_exe = get_exe_path()?;
+    // Part 2: Conditional Logic based on feature flag
+    #[cfg(not(feature = "gemini_python_broker"))]
+    {
+        // Original logic for Claude/Cursor integration
+        let this_exe = get_exe_path()?;
+        let mut errors = vec![];
+        let results = vec![
+            install_to_config(get_claude_config(), &this_exe, "Claude"),
+            install_to_config(get_cursor_config(), &this_exe, "Cursor"),
+        ];
+        let successes: Vec<_> = results
+            .into_iter()
+            .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
+            .collect();
 
-    let mut errors = vec![];
-    let results = vec![
-        install_to_config(get_claude_config(), &this_exe, "Claude"),
-        install_to_config(get_cursor_config(), &this_exe, "Cursor"),
-    ];
+        if successes.is_empty() {
+            let error_detail = errors.into_iter().fold(
+                eyre!("Failed to configure integration for either Claude or Cursor."),
+                |report, e| report.note(e),
+            );
+            return Err(error_detail.wrap_err("MCP Server setup for external AI tools failed"));
+        }
 
-    let successes: Vec<_> = results
-        .into_iter()
-        .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
-        .collect();
-
-    if successes.is_empty() {
-        let error = errors.into_iter().fold(
-            eyre!("Failed to install to either Claude or Cursor"),
-            |report, e| report.note(e),
-        );
-        return Err(error);
+        println!();
+        let msg = get_message_claude_cursor(successes.join("\n"));
+        println!("{}", msg);
+        Ok(msg)
     }
 
-    println!();
-    let msg = get_message(successes.join("\n"));
-    println!("{}", msg);
-    Ok(msg)
+    #[cfg(feature = "gemini_python_broker")]
+    {
+        // New logic for Gemini Python Broker mode
+        println!();
+        let msg = get_message_gemini_python_broker();
+        println!("{}", msg);
+        Ok(msg)
+    }
 }
 
 #[cfg(target_os = "windows")]
