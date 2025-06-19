@@ -1,3 +1,5 @@
+-- MockWebSocketService.luau (Corrected Singleton Version)
+
 local HttpService = game:GetService("HttpService")
 
 local MockWebSocketClient = {}
@@ -65,14 +67,34 @@ function MockWebSocketClient.new(uri: string): MockWebSocketClient
 end
 
 local function doRequest(url: string, method: "GET" | "POST", body: any)
+	local requestBody: string?
+	local contentType = "application/json" -- Default to JSON
+
+	if method == "POST" then
+		if type(body) == "table" then
+			local ok, encoded = pcall(HttpService.JSONEncode, HttpService, body)
+			if ok then
+				requestBody = encoded
+			else
+				warn("MockWebSocketService: Failed to JSON-encode POST body table:", tostring(encoded))
+				return nil
+			end
+		elseif type(body) == "string" then
+			requestBody = body
+		else
+			warn("MockWebSocketService: Unsupported POST body type:", typeof(body))
+			return nil
+		end
+	end
+
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
 			Url = url,
 			Method = method,
 			Headers = {
-				["Content-Type"] = "application/json",
+				["Content-Type"] = contentType,
 			},
-			Body = if body then HttpService:JSONEncode(body) else nil,
+			Body = requestBody,
 			Compress = Enum.HttpCompression.None,
 		})
 	end)
@@ -88,7 +110,13 @@ function MockWebSocketClient._OpenImpl(self: MockWebSocketClientPrivate)
 
 	self._pollTask = task.spawn(function()
 		while self.ConnectionState == EnumWebSocketState.Open do
+			-- Check connection state again before making the request
+			if self.ConnectionState ~= EnumWebSocketState.Open then break end
+
 			local response = doRequest(self._uri .. self._receiveEndpoint, "GET")
+
+			-- And check again after the request returns
+			if self.ConnectionState ~= EnumWebSocketState.Open then break end
 
 			if response and response.Body then
 				self._MessageReceivedEvent:Fire(response.Body)
@@ -107,17 +135,16 @@ function MockWebSocketClient.Close(self: MockWebSocketClientPrivate)
 	if CloseableStates[self.ConnectionState] then
 		self.ConnectionState = EnumWebSocketState.Closing
 
-		if self._pollTask and coroutine.status(self._pollTask) == "running" then
+		if self._pollTask and coroutine.status(self._pollTask) ~= "dead" then
 			task.cancel(self._pollTask)
-			self._pollTask = nil :: any
 		end
+		self._pollTask = nil
 
 		self.ConnectionState = EnumWebSocketState.Closed
 		self._ClosedEvent:Fire()
 	end
 end
 
--- START DEVIATION: These methods are not present in the real WebSocketClient instance
 function MockWebSocketClient.SetReceiveEndpoint(self: MockWebSocketClientPrivate, endpoint: string)
 	self._receiveEndpoint = endpoint
 end
@@ -125,7 +152,6 @@ end
 function MockWebSocketClient.SetSendEndpoint(self: MockWebSocketClientPrivate, endpoint: string)
 	self._sendEndpoint = endpoint
 end
--- END DEVIATION
 
 local MockWebSocketService = {}
 MockWebSocketService.__index = MockWebSocketService
@@ -134,8 +160,34 @@ type MockWebSocketService = {
 	CreateClient: (self: MockWebSocketService, uri: string) -> MockWebSocketClient,
 }
 
+-- =======================================================================================
+-- THE SINGLETON PATTERN FIX IS IMPLEMENTED HERE
+-- =======================================================================================
+
+-- A private, module-level variable to hold the one and only client instance.
+local sharedClientInstance: MockWebSocketClient? = nil
+
 function MockWebSocketService.CreateClient(_: MockWebSocketService, uri: string)
-	return MockWebSocketClient.new(uri)
+	-- If a shared client already exists AND it's not in a closed/closing state,
+	-- return the existing one immediately.
+	if sharedClientInstance and sharedClientInstance.ConnectionState ~= EnumWebSocketState.Closed and sharedClientInstance.ConnectionState ~= EnumWebSocketState.Closing then
+		return sharedClientInstance
+	end
+
+	-- If no client exists (or the old one was closed), create a new one.
+	local newClient = MockWebSocketClient.new(uri)
+	
+	-- Store the newly created client as our single shared instance.
+	sharedClientInstance = newClient
+	
+	-- When this client is closed, clear the shared instance so a new one can be made later.
+	newClient.Closed:Once(function()
+		if sharedClientInstance == newClient then
+			sharedClientInstance = nil
+		end
+	end)
+	
+	return newClient
 end
 
 return MockWebSocketService

@@ -1,0 +1,213 @@
+# Comprehensive Test Suite for Luau Tools
+
+# --- Section 1: Instance Creation and Basic Properties (CreateInstance, GetInstanceProperties, SetInstanceProperties, delete_instance) ---
+
+# Test 1.1: Create a simple Part, get its default properties, set some, get again, then delete
+# Agent should check: Name="TestPart1", Anchored=true, Position is default (e.g., 0,0,0 or 0,0.5,0 depending on where parts spawn)
+SetInstanceProperties path=Workspace.TestPart1 properties={BrickColor='Bright blue', Size={x=5,y=5,z=5}, Position={x=10,y=2.5,z=10}, Transparency=0.5}
+# Agent should check: BrickColor, Size, Position, Transparency are set. NonExistentProperty has an error.
+GetInstanceProperties path=Workspace.TestPart1 property_names=['BrickColor','Size','Position','Transparency','NonExistentProperty']
+delete_instance path=Workspace.TestPart1
+GetInstanceProperties path=Workspace.TestPart1 # Should report not found or error
+
+# Test 1.2: Create a Folder in ServerStorage, and a Value inside it
+delete_instance path=ServerStorage.TestFolder # Deleting folder should delete child
+
+# Test 1.2.1: GetInstanceProperties on a Folder (Checking error for non-existent property)
+# Agent should check: Name="TestFolderGetProps", ClassName="Folder". Position has an error.
+GetInstanceProperties path=ServerStorage.TestFolderGetProps property_names=['Name','ClassName','Position']
+
+# Test 1.3: Create a Model and reparent an instance into it
+SetInstanceProperties path=Workspace.OrphanPart properties={Parent='Workspace.TestModel'}
+GetInstanceProperties path=Workspace.TestModel.OrphanPart property_names=['Parent']
+delete_instance path=Workspace.TestModel
+
+# Test 1.4: Create different value types (Vector3Value handling improved in CreateInstance via ToolHelpers)
+# Agent check: Value is Vector3(1,2,3)
+
+# Test 1.5: Attempt to create instance with invalid class name
+CreateInstance class_name=NotARealClass properties={Name='InvalidInstance'} # Should error
+
+# Test 1.6: Set invalid property (Testing detailed JSON response from SetInstanceProperties)
+# Agent should check: JSON response from SetInstanceProperties indicates Name,BrickColor in succeeded_properties; InvalidProp,Size in failed_properties.
+SetInstanceProperties path=Workspace.SetPropsTestPart properties={Name='NewName', BrickColor='Really red', InvalidProp='TestValue', Size={x="abc",y=1,z=1}}
+# Agent should check: Name is "NewName", BrickColor is "Really red", Size is original/default (not "abc",1,1).
+GetInstanceProperties path=Workspace.SetPropsTestPart property_names=['Name','BrickColor','Size']
+delete_instance path=Workspace.SetPropsTestPart
+
+# --- Section 2: Selection and Hierarchy (SelectInstances, get_selection, FindFirstChildMatching, GetChildrenOfInstance, GetDescendantsOfInstance) ---
+
+# Test 2.1: Select and Get Selection
+get_selection # Agent should check: JSON response is ["Workspace.SelectPartA"]
+get_selection # Agent should check: JSON response is ["Workspace.SelectPartA", "Workspace.SelectPartB"] (order might vary)
+get_selection # Agent should check: JSON response is []
+
+# Test 2.2: FindChild
+FindFirstChildMatching parent_path=Workspace.FindTestParent child_name=NonExistentChild recursive=true # Should report not found
+
+# Test 2.3: GetChildren / GetDescendants
+
+# --- Section 3: Tags & Collections (AddTag, HasTag, GetInstancesWithTag, RemoveTag) ---
+
+# Test 3.1: Full tag lifecycle
+HasTag instance_path=Workspace.TaggedPart1 tag_name=TestTag # Should be true
+HasTag instance_path=Workspace.TaggedPart2 tag_name=AnotherTestTag # Should be false
+GetInstancesWithTag tag_name=TestTag # Agent should check: JSON has ["Workspace.TaggedPart1", "Workspace.TaggedPart2"] (order might vary)
+GetInstancesWithTag tag_name=AnotherTestTag # Agent should check: JSON has ["Workspace.TaggedPart1"]
+RemoveTag instance_path=Workspace.TaggedPart1 tag_name=TestTag
+HasTag instance_path=Workspace.TaggedPart1 tag_name=TestTag # Should be false
+GetInstancesWithTag tag_name=TestTag # Agent should check: JSON has ["Workspace.TaggedPart2"]
+RemoveTag instance_path=Workspace.TaggedPart2 tag_name=NonExistentTag # Should succeed gracefully
+delete_instance path=Workspace.TaggedPart1
+delete_instance path=Workspace.TaggedPart2
+
+# --- Section 4: Services & Environment (Lighting, Workspace, Sound) ---
+
+# Test 4.1: Lighting Properties
+GetLightingProperty property_name=ClockTime
+GetLightingProperty property_name=Brightness
+SetLightingProperty property_name=Brightness value=0.5
+GetLightingProperty property_name=Brightness # Should be 0.5
+SetLightingProperty property_name=FogEnd value=500
+GetLightingProperty property_name=FogEnd
+
+# Test 4.2: Workspace Properties
+GetWorkspaceProperty property_name=Gravity
+SetWorkspaceProperty property_name=Gravity value=100
+GetWorkspaceProperty property_name=Gravity # Should be 100
+SetWorkspaceProperty property_name=Gravity value=196.2 # Reset to default-ish
+
+# Test 4.3: PlaySoundId (basic creation and property check)
+PlaySoundId sound_id=rbxassetid://1845244173 properties={Name='TestSoundInstance', Volume=0.7, Looped=true} parent_path=Workspace
+GetInstanceProperties path=Workspace.TestSoundInstance property_names=['SoundId','Volume','Looped','Playing','Parent']
+delete_instance path=Workspace.TestSoundInstance
+
+# --- Section 5: RunCode ---
+
+# Test 5.1: Simple print
+RunCode command="print('RunCode Test: Hello World')"
+# Test 5.2: Return a value
+RunCode command="return 5 + 5" # Output should show the return value
+# Test 5.3: Code with an error
+RunCode command="error('RunCode Test: This is a test error')" # Should report error
+
+# --- Section 6: DataStore (Basic Tests - requires service availability) ---
+# IMPORTANT: DataStore operations require this Roblox Studio place to be PUBLISHED to the web.
+# These tests will fail if the place is not published or if DataStore service is unavailable.
+# These tests might be flaky depending on DataStore availability and previous runs.
+# Test 6.1: Save, Load, Increment, Remove
+# Note for SaveData: The 'data' field must be a JSON string for complex data (e.g., '{"key":"value"}') or a string representation for primitives (e.g., '"text"', '"123"', '"true"').
+SaveData store_name=TestStore key=TestKey data='{"message":"Hello DataStore", "value":123}'
+LoadData store_name=TestStore key=TestKey # Check output for the saved data
+IncrementData store_name=TestStore key=NumericKey increment_by=5
+LoadData store_name=TestStore key=NumericKey # Check new value
+IncrementData store_name=TestStore key=NumericKey increment_by=-2
+LoadData store_name=TestStore key=NumericKey # Check new value
+RemoveData store_name=TestStore key=TestKey
+LoadData store_name=TestStore key=TestKey # Should report nil or no data
+RemoveData store_name=TestStore key=NumericKey
+
+# --- Section 7: GUI Creation (CreateGuiElement) ---
+
+# Test 7.1: Create a simple GUI structure
+CreateGuiElement element_type=ScreenGui parent_path=StarterGui properties={Name='TestScreenGui'}
+CreateGuiElement element_type=Frame parent_path=StarterGui.TestScreenGui properties={Name='TestFrame', Size={x_scale=0.5,x_offset=0,y_scale=0.5,y_offset=0}, Position={x_scale=0.25,x_offset=0,y_scale=0.25,y_offset=0}, BackgroundColor3={r=0.1,g=0.1,b=0.8}}
+CreateGuiElement element_type=TextLabel parent_path=StarterGui.TestScreenGui.TestFrame properties={Name='TestLabel', Size={x_scale=1,x_offset=0,y_scale=0.2,y_offset=0}, Text='Hello GUI', TextColor3={r=1,g=1,b=1}, BackgroundTransparency=1}
+GetInstanceProperties path=StarterGui.TestScreenGui.TestFrame.TestLabel property_names=['Text','TextColor3','Size','Position']
+# delete_instance path=StarterGui.TestScreenGui # Clean up GUI
+
+# --- Section 8: Asset Management (LoadAssetById, InsertModel) ---
+# Test 8.1: Load a known free asset
+# IMPORTANT: Asset loading depends on the asset's public availability, trust settings,
+# and the Studio place's security settings (e.g., allowing third-party assets).
+# The asset ID 161692711 (Roblox Sword) may fail due to trust issues if not configured in the place.
+# The tool's error reporting for such failures is part of what this can test.
+LoadAssetById asset_id=161692711 parent_path=Workspace desired_name=LoadedSword
+GetInstanceProperties path=Workspace.LoadedSword property_names=['ClassName']
+delete_instance path=Workspace.LoadedSword
+
+# Test 8.2: Insert a model by search (might be unreliable due to search result changes)
+# InsertModel query="Basic Platform" parent_path=ServerStorage # This is very dependent on search results
+# For more reliable test, use an ID with InsertModel if it supports it, or stick to LoadAssetById for ID tests.
+# The current InsertModel tool seems to take a query string.
+# Create a placeholder for this test as it's hard to make it deterministic.
+RunCode command="print('Skipping InsertModel by search query test due to non-deterministic results. Tested by ID with LoadAssetById.')"
+
+
+# ##############################################################################
+# --- Simple Game: Obby ---
+# ##############################################################################
+
+# --- Game Setup ---
+RunCode command="print('Starting Simple Game: Obby construction...')"
+CreateInstance class_name=SpawnLocation properties={Name='ObbySpawnPoint', Parent='Workspace', Anchored=true, Size={x=12,y=1,z=12}, Position={x=0,y=0.5,z=0}, BrickColor='Bright green'}
+SetInstanceProperties path=Workspace properties={Gravity=100} # Slightly lower gravity for easier jumps
+
+# --- Lobby Area ---
+CreateInstance class_name=Part properties={Name='LobbyPlatform', Parent='Workspace', Anchored=true, Size={x=30,y=2,z=30}, Position={x=0,y=-1,z=-30}, BrickColor='Medium stone grey', Material='Concrete'}
+RunScript parent_path=Workspace.LobbyPlatform script_name=StartSignText script_type=Script initially_disabled=false script_source="local SurfaceGui = Instance.new('SurfaceGui', script.Parent) local TextLabel = Instance.new('TextLabel', SurfaceGui) TextLabel.Text = 'OBBY START!' TextLabel.Size = UDim2.new(1,0,1,0) TextLabel.TextScaled = true TextLabel.BackgroundColor3 = Color3.new(0.2,0.2,0.2) TextLabel.TextColor3 = Color3.new(1,1,1)"
+
+# --- Obstacle 1: Jumping Platforms ---
+CreateInstance class_name=Part properties={Name='JumpPlatform1', Parent='Workspace', Anchored=true, Size={x=6,y=1,z=6}, Position={x=0,y=5,z=-55}, BrickColor='Deep orange', Material='Plastic'}
+CreateInstance class_name=Part properties={Name='JumpPlatform2', Parent='Workspace', Anchored=true, Size={x=5,y=1,z=5}, Position={x=15,y=10,z=-65}, BrickColor='Electric blue', Material='Plastic'}
+CreateInstance class_name=Part properties={Name='JumpPlatform3', Parent='Workspace', Anchored=true, Size={x=4,y=1,z=4}, Position={x=0,y=15,z=-75}, BrickColor='Lime green', Material='Plastic'}
+
+# --- Obstacle 2: Kill Brick ---
+CreateInstance class_name=Part properties={Name='KillBrick', Parent='Workspace', Anchored=true, Size={x=10,y=1,z=10}, Position={x=-15,y=10,z=-65}, BrickColor='Really black', Transparency=0.3, Material='Neon'}
+RunScript parent_path=Workspace.KillBrick script_name=KillScript script_type=Script initially_disabled=false script_source="script.Parent.Touched:Connect(function(hit) local humanoid = hit.Parent:FindFirstChildWhichIsA('Humanoid') if humanoid then humanoid.Health = 0 end end)"
+
+# --- Obstacle 3: Rotating Platform (Simplified - just a static platform due to tween verification complexity) ---
+CreateInstance class_name=Part properties={Name='ChallengePlatform', Parent='Workspace', Anchored=true, Size={x=15,y=1,z=4}, Position={x=0,y=20,z=-90}, BrickColor='Dark stone grey', Material='Metal'}
+
+# --- End Area ---
+CreateInstance class_name=Part properties={Name='VictoryPlatform', Parent='Workspace', Anchored=true, Size={x=25,y=2,z=25}, Position={x=0,y=25,z=-115}, BrickColor='Gold', Material='DiamondPlate'}
+RunScript parent_path=Workspace.VictoryPlatform script_name=VictoryScript script_type=Script initially_disabled=false script_source="script.Parent.Touched:Connect(function(hit) local char = hit.Parent if char then local player = game:GetService('Players'):GetPlayerFromCharacter(char) if player then print('PLAYER ' .. player.Name .. ' HAS WON THE OBBY!') local leaderstats = player:FindFirstChild('leaderstats') if leaderstats then local wins = leaderstats:FindFirstChild('Wins') if wins and wins:IsA('IntValue') then wins.Value = wins.Value + 1 else print('No Wins stat found for player.') end else print('No leaderstats found for player.') end end end end)"
+# Basic leaderstats setup for the victory script to interact with (optional, but makes the victory script more meaningful)
+RunCode command="game:GetService('Players').PlayerAdded:Connect(function(player) local leaderstats = Instance.new('Folder', player) leaderstats.Name = 'leaderstats' local wins = Instance.new('IntValue', leaderstats) wins.Name = 'Wins' wins.Value = 0 end)"
+
+
+# --- Add some tags for game elements ---
+AddTag instance_path=Workspace.LobbyPlatform tag_name=ObbyElement
+AddTag instance_path=Workspace.JumpPlatform1 tag_name=ObbyElement
+AddTag instance_path=Workspace.JumpPlatform2 tag_name=ObbyElement
+AddTag instance_path=Workspace.JumpPlatform3 tag_name=ObbyElement
+AddTag instance_path=Workspace.KillBrick tag_name=ObbyElement
+AddTag instance_path=Workspace.KillBrick tag_name=Hazard
+AddTag instance_path=Workspace.ChallengePlatform tag_name=ObbyElement
+AddTag instance_path=Workspace.VictoryPlatform tag_name=ObbyElement
+AddTag instance_path=Workspace.VictoryPlatform tag_name=Goal
+
+# --- Final Check (Optional) ---
+# GetInstancesWithTag tag_name=ObbyElement
+# GetChildrenOfInstance instance_path=Workspace
+RunCode command="print('Simple Game: Obby construction commands complete.')"
+
+# --- Cleanup Section (Important for testing to be repeatable) ---
+# Delete all parts created for the obby game (use tags or known names)
+# This is important if tests are run multiple times.
+# For simplicity, let's assume user will clear workspace or we list them.
+# delete_instance path=Workspace.ObbySpawnPoint
+# delete_instance path=Workspace.LobbyPlatform
+# delete_instance path=Workspace.JumpPlatform1
+# delete_instance path=Workspace.JumpPlatform2
+# delete_instance path=Workspace.JumpPlatform3
+# delete_instance path=Workspace.KillBrick
+# delete_instance path=Workspace.ChallengePlatform
+# delete_instance path=Workspace.VictoryPlatform
+# RunCode command="print('Attempted cleanup of obby parts. Review workspace.')"
+# A more robust cleanup would use GetInstancesWithTag and loop delete, but that's too complex for test_commands.txt itself.
+# The individual delete tests already cover functionality.
+
+
+# --- Section 9: Test for Null Arguments in Tool Calls and create_part transformation ---
+
+# This command is intended to see if the LLM might call CreateInstance (or another tool)
+# with 'null' or missing arguments if the properties are not well-defined by the prompt.
+# The recent fix in main.py should handle fc_args being None by converting it to {}.
+Create a new part with default settings.
+# This command tests the create_part to CreateInstance transformation with specific properties.
+Create a part named MyTransformTestCube in Workspace, color it blue, make it anchored, and set its size to (4, 8, 2).
+# Test create_instance phrasing with instance_type for a non-Part.
+Create an instance of type SpotLight, name it MyTestSpotlight, and parent it to Workspace.TestPart1. Set its Range to 20 and Angle to 45.
+# Test create_instance phrasing for a Part, specifying "as a Part" and some properties.
+Create an instance named MyInstancePart in Workspace as a Part, size (3,3,3), material Neon.
