@@ -5,7 +5,7 @@ on:
   - pull_request
     
 env:
-  CARGO_PKG_VERSION: "0.1.${{ github.run_number }}"
+  CARGO_PKG_VERSION: "0.2.${{ github.run_number }}"
   
 permissions:
   contents: write

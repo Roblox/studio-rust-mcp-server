@@ -3,7 +3,7 @@ use librojo::cli;
 fn main() {
     let out_dir = std::env::var_os("OUT_DIR").unwrap();
     let dest_path = std::path::PathBuf::from(&out_dir).join("MCPStudioPlugin.rbxm");
-    eprintln!("Rebuilding plugin: {:?}", dest_path);
+    eprintln!("Rebuilding plugin: {dest_path:?}");
     let options = cli::Options {
         global: cli::GlobalOptions {
             verbosity: 1,

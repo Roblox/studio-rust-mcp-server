@@ -151,7 +151,7 @@ async fn install_internal() -> Result<String> {
 
     println!();
     let msg = get_message(successes.join("\n"));
-    println!("{}", msg);
+    println!("{msg}");
     Ok(msg)
 }
 
@@ -171,7 +171,7 @@ pub async fn install() -> Result<()> {
     let alert_builder = match install_internal().await {
         Err(e) => DialogBuilder::message()
             .set_level(MessageLevel::Error)
-            .set_text(format!("Errors occurred: {:#}", e)),
+            .set_text(format!("Errors occurred: {e:#}")),
         Ok(msg) => DialogBuilder::message()
             .set_level(MessageLevel::Info)
             .set_text(msg),
