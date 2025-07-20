@@ -90,21 +90,21 @@ impl ServerHandler for RBXStudioServer {
     }
 }
 
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-struct RunCodeArguments {
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct RunCode {
     #[schemars(description = "Code to run")]
     command: String,
 }
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-struct InsertModelArguments {
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct InsertModel {
     #[schemars(description = "Query to search for the model")]
     query: String,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
-    RunCode { command: String },
-    InsertModel { query: String },
+    RunCode(RunCode),
+    InsertModel(InsertModel),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -120,12 +120,10 @@ impl RBXStudioServer {
     )]
     async fn run_code(
         &self,
-        Parameters(command): Parameters<RunCodeArguments>,
+        Parameters(args): Parameters<RunCode>,
     ) -> Result<CallToolResult, ErrorData> {
-        self.generic_tool_run(ToolArgumentValues::RunCode {
-            command: command.command,
-        })
-        .await
+        self.generic_tool_run(ToolArgumentValues::RunCode(args))
+            .await
     }
 
     #[tool(
@@ -133,9 +131,9 @@ impl RBXStudioServer {
     )]
     async fn insert_model(
         &self,
-        Parameters(query): Parameters<InsertModelArguments>,
+        Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
-        self.generic_tool_run(ToolArgumentValues::InsertModel { query: query.query })
+        self.generic_tool_run(ToolArgumentValues::InsertModel(args))
             .await
     }
 
