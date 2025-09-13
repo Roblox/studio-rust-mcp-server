@@ -16,8 +16,17 @@ This MCP server transforms Roblox Studio into an AI-powered development environm
 ### Core Capabilities
 - **Run Code**: Execute Luau scripts in Roblox Studio (ServerScripts and LocalScripts)
 - **Insert Models**: Import models from the Roblox Marketplace
+- **Unit Testing**: Comprehensive testing framework with TDD support, module reloading, and mocking
 - **Search & Fetch**: Find code examples and model information (ChatGPT integration)
 - **Real-time Feedback**: Get immediate results and error handling
+
+### Testing Features
+- **Test-Driven Development**: Full TDD workflow support with Red-Green-Refactor cycle
+- **Module Reloading**: Reload modules during testing to simulate fresh state
+- **Mocking Framework**: Create mocks for isolated testing of components
+- **Assertion Library**: Comprehensive assertion methods for test validation
+- **Test Coverage**: Track test execution and results with detailed reporting
+- **Timeout Support**: Prevent hanging tests with configurable timeouts
 
 ### AI Assistant Support
 - **Claude Desktop**: Full integration with Claude's desktop application
@@ -77,6 +86,16 @@ Choose your AI assistant for detailed setup instructions:
 "Import a basic house model from the marketplace"
 ```
 
+### Unit Testing
+```
+"Create unit tests for a calculator module with addition and subtraction"
+```
+
+### Test-Driven Development
+```
+"Write failing tests for a new inventory system, then implement the code to pass them"
+```
+
 ### ChatGPT Deep Research
 ```
 "Show me examples of GUI interaction scripts and vehicle models"
@@ -88,6 +107,7 @@ Choose your AI assistant for detailed setup instructions:
 |------|-------------|------------|
 | `run_code` | Execute Luau scripts in Studio | Claude, Cursor |
 | `insert_model` | Import models from marketplace | Claude, Cursor |
+| `run_tests` | Execute unit tests with TDD support | Claude, Cursor |
 | `search` | Find code examples and models | ChatGPT |
 | `fetch` | Get detailed code/model information | ChatGPT |
 

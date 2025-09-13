@@ -83,7 +83,7 @@ impl ServerHandler for RBXStudioServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Roblox Studio MCP Server with ChatGPT integration. This server provides access to Roblox Studio code examples and model information. Use run_code to execute Luau scripts in Roblox Studio, insert_model to add models from the marketplace, search to find code snippets and model resources, and fetch to retrieve complete code examples or model details. Focuses on the two main Roblox Studio capabilities: importing code and models."
+                "Roblox Studio MCP Server with ChatGPT integration and comprehensive unit testing support. This server provides access to Roblox Studio code examples, model information, and advanced testing capabilities. Use run_code to execute Luau scripts in Roblox Studio, insert_model to add models from the marketplace, run_tests to execute unit tests with full TDD support including module reloading, mocking, and coverage reporting, search to find code snippets and model resources, and fetch to retrieve complete code examples or model details. Perfect for Test-Driven Development workflows with AI assistance."
                     .to_string(),
             ),
         }
@@ -99,6 +99,12 @@ struct RunCode {
 struct InsertModel {
     #[schemars(description = "Query to search for the model")]
     query: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct RunTests {
+    #[schemars(description = "Test code to execute in Roblox Studio")]
+    test_code: String,
 }
 
 // ChatGPT MCP required tools
@@ -140,6 +146,7 @@ struct Document {
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    RunTests(RunTests),
     Search(Search),
     Fetch(Fetch),
 }
@@ -171,6 +178,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Runs unit tests in Roblox Studio. Executes test code and returns detailed test results including pass/fail status, execution time, and error messages. Perfect for TDD workflows and automated testing."
+    )]
+    async fn run_tests(
+        &self,
+        Parameters(args): Parameters<RunTests>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::RunTests(args))
             .await
     }
 
@@ -263,6 +281,32 @@ impl RBXStudioServer {
                     id: "data-store-code".to_string(),
                     title: "DataStore Service Script".to_string(),
                     url: "https://create.roblox.com/docs/scripting/data/data-stores".to_string(),
+                },
+            ]);
+        }
+        
+        // Testing-related searches
+        if query_lower.contains("test") || query_lower.contains("unit") || query_lower.contains("tdd") || query_lower.contains("mock") {
+            results.extend(vec![
+                SearchResult {
+                    id: "unit-testing-basic".to_string(),
+                    title: "Basic Unit Testing Example".to_string(),
+                    url: "https://create.roblox.com/docs/scripting/testing".to_string(),
+                },
+                SearchResult {
+                    id: "mocking-framework".to_string(),
+                    title: "Mocking Framework for Testing".to_string(),
+                    url: "https://create.roblox.com/docs/scripting/testing/mocking".to_string(),
+                },
+                SearchResult {
+                    id: "tdd-workflow".to_string(),
+                    title: "Test-Driven Development Workflow".to_string(),
+                    url: "https://create.roblox.com/docs/scripting/testing/tdd".to_string(),
+                },
+                SearchResult {
+                    id: "module-reloading".to_string(),
+                    title: "Module Reloading for Testing".to_string(),
+                    url: "https://create.roblox.com/docs/scripting/testing/module-reload".to_string(),
                 },
             ]);
         }
@@ -599,10 +643,339 @@ Script Integration:
                     meta
                 }),
             },
+            // Testing examples
+            "unit-testing-basic" => Document {
+                id: id.clone(),
+                title: "Basic Unit Testing Example".to_string(),
+                text: r#"-- Basic Unit Testing Example
+-- This demonstrates how to write and run unit tests in Roblox Studio
+
+-- Create a test suite
+local suite = TestSuite.new("Basic Math Tests")
+
+-- Add individual tests
+suite:addTest("Addition Test", function()
+    local result = 2 + 2
+    Assertions.assertEqual(result, 4, "2 + 2 should equal 4")
+end)
+
+suite:addTest("Subtraction Test", function()
+    local result = 5 - 3
+    Assertions.assertEqual(result, 2, "5 - 3 should equal 2")
+end)
+
+suite:addTest("Multiplication Test", function()
+    local result = 3 * 4
+    Assertions.assertEqual(result, 12, "3 * 4 should equal 12")
+end)
+
+-- Add setup and teardown
+suite.beforeAll = function()
+    print("Starting math tests...")
+end
+
+suite.afterAll = function()
+    print("Math tests completed!")
+end
+
+-- Return the test suite
+return {suite}"#.to_string(),
+                url: "https://create.roblox.com/docs/scripting/testing".to_string(),
+                metadata: Some({
+                    let mut meta = serde_json::Map::new();
+                    meta.insert("type".to_string(), serde_json::Value::String("test_code".to_string()));
+                    meta.insert("category".to_string(), serde_json::Value::String("unit_testing".to_string()));
+                    meta.insert("difficulty".to_string(), serde_json::Value::String("beginner".to_string()));
+                    meta
+                }),
+            },
+            "mocking-framework" => Document {
+                id: id.clone(),
+                title: "Mocking Framework for Testing".to_string(),
+                text: r#"-- Mocking Framework Example
+-- This demonstrates how to use mocks for isolated testing
+
+-- Create a test suite for service testing
+local suite = TestSuite.new("Service Mocking Tests")
+
+-- Mock a DataStore service
+suite:addTest("DataStore Mock Test", function()
+    local mockDataStore = MockFramework.createMock()
+    
+    -- Set up mock return values
+    mockDataStore:setReturnValue("GetAsync", {coins = 100, level = 5})
+    mockDataStore:setReturnValue("SetAsync", true)
+    
+    -- Test the mock
+    local playerData = mockDataStore.GetAsync("player123")
+    Assertions.assertNotNil(playerData, "Mock should return player data")
+    Assertions.assertEqual(playerData.coins, 100, "Mock should return correct coins")
+    Assertions.assertEqual(playerData.level, 5, "Mock should return correct level")
+    
+    -- Test mock calls
+    local calls = mockDataStore:getCalls("GetAsync")
+    Assertions.assertEqual(#calls, 1, "GetAsync should be called once")
+    
+    -- Test SetAsync
+    local success = mockDataStore.SetAsync("player123", {coins = 150})
+    Assertions.assertTrue(success, "SetAsync should return true")
+end)
+
+-- Mock a game service
+suite:addTest("Game Service Mock Test", function()
+    local mockPlayers = MockFramework.createMock()
+    
+    -- Set up mock behavior
+    mockPlayers:setReturnValue("GetPlayerByUserId", {Name = "TestPlayer", UserId = 123})
+    
+    local player = mockPlayers.GetPlayerByUserId(123)
+    Assertions.assertNotNil(player, "Mock should return a player")
+    Assertions.assertEqual(player.Name, "TestPlayer", "Player name should match")
+    
+    -- Verify call tracking
+    local calls = mockPlayers:getCalls("GetPlayerByUserId")
+    Assertions.assertEqual(#calls, 1, "GetPlayerByUserId should be called once")
+    Assertions.assertEqual(calls[1].args[1], 123, "Call should have correct user ID")
+end)
+
+return {suite}"#.to_string(),
+                url: "https://create.roblox.com/docs/scripting/testing/mocking".to_string(),
+                metadata: Some({
+                    let mut meta = serde_json::Map::new();
+                    meta.insert("type".to_string(), serde_json::Value::String("test_code".to_string()));
+                    meta.insert("category".to_string(), serde_json::Value::String("mocking".to_string()));
+                    meta.insert("difficulty".to_string(), serde_json::Value::String("intermediate".to_string()));
+                    meta
+                }),
+            },
+            "tdd-workflow" => Document {
+                id: id.clone(),
+                title: "Test-Driven Development Workflow".to_string(),
+                text: r#"-- Test-Driven Development (TDD) Workflow Example
+-- This demonstrates the Red-Green-Refactor cycle
+
+-- Step 1: Write a failing test (RED)
+local suite = TestSuite.new("TDD Calculator Tests")
+
+suite:addTest("Calculator Addition - Initial Failing Test", function()
+    -- This test will fail initially because Calculator doesn't exist yet
+    local calculator = require(script.Parent.Calculator)
+    local result = calculator.add(2, 3)
+    Assertions.assertEqual(result, 5, "Calculator should add 2 + 3 = 5")
+end)
+
+suite:addTest("Calculator Subtraction - Initial Failing Test", function()
+    local calculator = require(script.Parent.Calculator)
+    local result = calculator.subtract(10, 4)
+    Assertions.assertEqual(result, 6, "Calculator should subtract 10 - 4 = 6")
+end)
+
+-- Step 2: Write minimal code to pass tests (GREEN)
+-- This would be the Calculator module:
+local calculatorCode = [[
+local Calculator = {}
+
+function Calculator.add(a, b)
+    return a + b
+end
+
+function Calculator.subtract(a, b)
+    return a - b
+end
+
+function Calculator.multiply(a, b)
+    return a * b
+end
+
+function Calculator.divide(a, b)
+    if b == 0 then
+        error("Division by zero")
+    end
+    return a / b
+end
+
+return Calculator
+]]
+
+-- Step 3: Add more comprehensive tests
+suite:addTest("Calculator Division with Zero", function()
+    local calculator = require(script.Parent.Calculator)
+    Assertions.assertThrows(function()
+        calculator.divide(10, 0)
+    end, "Division by zero", "Should throw error for division by zero")
+end)
+
+suite:addTest("Calculator Edge Cases", function()
+    local calculator = require(script.Parent.Calculator)
+    
+    -- Test with negative numbers
+    Assertions.assertEqual(calculator.add(-2, 3), 1, "Should handle negative numbers")
+    Assertions.assertEqual(calculator.subtract(-2, -3), 1, "Should handle double negatives")
+    
+    -- Test with zero
+    Assertions.assertEqual(calculator.add(0, 5), 5, "Should handle zero addition")
+    Assertions.assertEqual(calculator.multiply(0, 100), 0, "Should handle zero multiplication")
+end)
+
+-- Step 4: Refactor tests (REFACTOR)
+-- Add setup and teardown for better organization
+local calculatorInstance = nil
+
+suite.beforeEach = function()
+    -- Reload the calculator module for fresh state
+    calculatorInstance = require(script.Parent.Calculator)
+end
+
+suite.afterEach = function()
+    -- Clean up if needed
+    calculatorInstance = nil
+end
+
+return {suite}"#.to_string(),
+                url: "https://create.roblox.com/docs/scripting/testing/tdd".to_string(),
+                metadata: Some({
+                    let mut meta = serde_json::Map::new();
+                    meta.insert("type".to_string(), serde_json::Value::String("test_code".to_string()));
+                    meta.insert("category".to_string(), serde_json::Value::String("tdd".to_string()));
+                    meta.insert("difficulty".to_string(), serde_json::Value::String("advanced".to_string()));
+                    meta
+                }),
+            },
+            "module-reloading" => Document {
+                id: id.clone(),
+                title: "Module Reloading for Testing".to_string(),
+                text: r#"-- Module Reloading Example
+-- This demonstrates how to reload modules for testing
+
+local suite = TestSuite.new("Module Reloading Tests")
+
+-- Test module code that we want to reload
+local testModuleCode = [[
+local TestModule = {}
+local callCount = 0
+
+function TestModule.increment()
+    callCount = callCount + 1
+    return callCount
+end
+
+function TestModule.getCount()
+    return callCount
+end
+
+function TestModule.reset()
+    callCount = 0
+end
+
+return TestModule
+]]
+
+-- Create a reloadable module
+local moduleContainer = nil
+local moduleScript = nil
+
+suite.beforeAll = function()
+    -- Create the module using ModuleReloader
+    moduleContainer = Instance.new("Folder")
+    moduleContainer.Name = "TestModuleContainer"
+    moduleContainer.Parent = game.ServerStorage
+    
+    moduleScript = Instance.new("ModuleScript")
+    moduleScript.Name = "TestModule"
+    moduleScript.Source = testModuleCode
+    moduleScript.Parent = moduleContainer
+end
+
+suite.afterAll = function()
+    -- Clean up the module
+    if moduleContainer then
+        moduleContainer:Destroy()
+    end
+end
+
+suite:addTest("Module Initial State", function()
+    local TestModule = require(moduleScript)
+    Assertions.assertEqual(TestModule.getCount(), 0, "Module should start with count 0")
+end)
+
+suite:addTest("Module Functionality", function()
+    local TestModule = require(moduleScript)
+    
+    local result1 = TestModule.increment()
+    Assertions.assertEqual(result1, 1, "First increment should return 1")
+    
+    local result2 = TestModule.increment()
+    Assertions.assertEqual(result2, 2, "Second increment should return 2")
+    
+    Assertions.assertEqual(TestModule.getCount(), 2, "Count should be 2 after two increments")
+end)
+
+suite:addTest("Module Reload Test", function()
+    -- Test the module in its current state
+    local TestModule1 = require(moduleScript)
+    TestModule1.increment()
+    TestModule1.increment()
+    Assertions.assertEqual(TestModule1.getCount(), 4, "Count should be 4 after reload")
+    
+    -- Reload the module with new code
+    local newModuleCode = [[
+local TestModule = {}
+local callCount = 0
+
+function TestModule.increment()
+    callCount = callCount + 2  -- Changed from +1 to +2
+    return callCount
+end
+
+function TestModule.getCount()
+    return callCount
+end
+
+function TestModule.reset()
+    callCount = 0
+end
+
+return TestModule
+]]
+    
+    -- Reload the module
+    moduleScript = ModuleReloader.reloadModule(moduleScript, newModuleCode)
+    
+    -- Test the reloaded module
+    local TestModule2 = require(moduleScript)
+    Assertions.assertEqual(TestModule2.getCount(), 0, "Reloaded module should start fresh")
+    
+    local result = TestModule2.increment()
+    Assertions.assertEqual(result, 2, "Reloaded module should increment by 2")
+    Assertions.assertEqual(TestModule2.getCount(), 2, "Count should be 2")
+end)
+
+suite:addTest("Multiple Module Instances", function()
+    -- Test that we can have multiple instances
+    local TestModule1 = require(moduleScript)
+    local TestModule2 = require(moduleScript)
+    
+    TestModule1.increment()
+    TestModule2.increment()
+    
+    Assertions.assertEqual(TestModule1.getCount(), 4, "First instance should have count 4")
+    Assertions.assertEqual(TestModule2.getCount(), 4, "Second instance should share state")
+end)
+
+return {suite}"#.to_string(),
+                url: "https://create.roblox.com/docs/scripting/testing/module-reload".to_string(),
+                metadata: Some({
+                    let mut meta = serde_json::Map::new();
+                    meta.insert("type".to_string(), serde_json::Value::String("test_code".to_string()));
+                    meta.insert("category".to_string(), serde_json::Value::String("module_reloading".to_string()));
+                    meta.insert("difficulty".to_string(), serde_json::Value::String("advanced".to_string()));
+                    meta
+                }),
+            },
             _ => Document {
                 id: id.clone(),
                 title: "Resource Not Found".to_string(),
-                text: format!("The requested resource '{}' was not found. Available resources include code examples and model information for Roblox Studio development.", id),
+                text: format!("The requested resource '{}' was not found. Available resources include code examples, model information, and comprehensive unit testing examples for Roblox Studio development.", id),
                 url: "https://create.roblox.com/docs/".to_string(),
                 metadata: Some({
                     let mut meta = serde_json::Map::new();

@@ -6,7 +6,11 @@ export type RunCodeArgs = {
 	command: string,
 }
 
-export type ToolArgs = { InsertModel: InsertModelArgs } | { RunCode: RunCodeArgs }
+export type RunTestsArgs = {
+	testCode: string,
+}
+
+export type ToolArgs = { InsertModel: InsertModelArgs } | { RunCode: RunCodeArgs } | { RunTests: RunTestsArgs }
 
 export type ToolFunction = (ToolArgs) -> string?
 

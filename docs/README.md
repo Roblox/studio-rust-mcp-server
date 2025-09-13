@@ -12,6 +12,7 @@ This directory contains comprehensive documentation for the Roblox Studio MCP Se
 ### Technical Documentation
 - **[API Reference](api.md)** - Complete API documentation
 - **[Plugin Development](plugin.md)** - Studio plugin architecture and development
+- **[Unit Testing Framework](unit-testing.md)** - Comprehensive testing guide with TDD support
 
 ### Additional Resources
 - **[MCP Protocol](https://modelcontextprotocol.io/)** - Official MCP documentation
@@ -57,6 +58,13 @@ This directory contains comprehensive documentation for the Roblox Studio MCP Se
 - Tool implementation
 - Extension guidelines
 - Testing and debugging
+
+### Unit Testing Framework
+- Test-Driven Development (TDD) workflows
+- Module reloading for fresh test state
+- Mocking framework for isolated testing
+- Comprehensive assertion library
+- Integration with AI assistants
 
 ## 📖 Additional Resources
 
