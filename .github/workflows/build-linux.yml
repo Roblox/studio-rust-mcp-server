@@ -47,14 +47,30 @@ jobs:
 
     - name: Build for Linux x86_64
       run: |
+        echo "Building for x86_64-unknown-linux-gnu"
+        rustup target list --installed
         cargo build --release --target x86_64-unknown-linux-gnu
-        strip target/x86_64-unknown-linux-gnu/release/rbx-studio-mcp
+        if [ -f target/x86_64-unknown-linux-gnu/release/rbx-studio-mcp ]; then
+          strip target/x86_64-unknown-linux-gnu/release/rbx-studio-mcp
+          echo "x86_64 build successful"
+        else
+          echo "Error: x86_64 build failed - binary not found"
+          exit 1
+        fi
 
     - name: Build for Linux aarch64
       run: |
+        echo "Adding aarch64 target and building"
         rustup target add aarch64-unknown-linux-gnu
+        rustup target list --installed
         cargo build --release --target aarch64-unknown-linux-gnu
-        strip target/aarch64-unknown-linux-gnu/release/rbx-studio-mcp
+        if [ -f target/aarch64-unknown-linux-gnu/release/rbx-studio-mcp ]; then
+          strip target/aarch64-unknown-linux-gnu/release/rbx-studio-mcp
+          echo "aarch64 build successful"
+        else
+          echo "Error: aarch64 build failed - binary not found"
+          exit 1
+        fi
 
     - name: Create release artifacts
       run: |

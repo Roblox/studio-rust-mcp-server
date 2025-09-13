@@ -75,10 +75,14 @@ jobs:
       - name: Install Selene
         run: |
           cargo install selene --locked
+          echo "Selene installed at: $(which selene)"
+          selene --version
       
       - name: Run Selene
         working-directory: plugin
-        run: selene .
+        run: |
+          echo "Running selene from: $(which selene)"
+          selene .
 
   StyLua:
     runs-on: ubuntu-latest
@@ -102,7 +106,11 @@ jobs:
       - name: Install StyLua
         run: |
           cargo install stylua --features luau --locked
+          echo "StyLua installed at: $(which stylua)"
+          stylua --version
       
       - name: Run StyLua
         working-directory: plugin
-        run: stylua . --check
+        run: |
+          echo "Running stylua from: $(which stylua)"
+          stylua . --check
