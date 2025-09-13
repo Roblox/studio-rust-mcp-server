@@ -40,9 +40,11 @@ Specialized Linux binary build process.
 The following secrets need to be configured in your repository settings:
 
 ### Security Workflow
+
 - `GITLEAKS_KEY` (optional): License key for Gitleaks if you have one
 
 ### Build Workflow
+
 - `APPLE_API_KEY_ID`: Apple Developer API Key ID
 - `APPLE_API_ISSUER`: Apple Developer API Issuer
 - `APPLE_API_KEY_CONTENT`: Apple Developer API Key content
