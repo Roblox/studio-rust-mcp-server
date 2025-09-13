@@ -17,10 +17,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install selene
         run: |
-          curl -L https://github.com/Kampfkarren/selene/releases/latest/download/selene-linux.zip -o selene.zip
-          unzip selene.zip
+          wget -O selene https://github.com/Kampfkarren/selene/releases/latest/download/selene-linux
+          chmod +x selene
           sudo mv selene /usr/local/bin/selene
-          sudo chmod +x /usr/local/bin/selene
       - name: Run selene
         run: |
           cd plugin
@@ -32,10 +31,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install StyLua
         run: |
-          curl -L https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux.zip -o stylua.zip
-          unzip stylua.zip
+          wget -O stylua https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux
+          chmod +x stylua
           sudo mv stylua /usr/local/bin/stylua
-          sudo chmod +x /usr/local/bin/stylua
       - name: Run StyLua
         run: |
           cd plugin

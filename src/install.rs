@@ -191,7 +191,7 @@ pub async fn install() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 pub async fn install() -> Result<()> {
-    use zenity_dialog::dialog::Dialog;
+    use zenity_dialog::Dialog;
 
     match install_internal().await {
         Ok(msg) => {
