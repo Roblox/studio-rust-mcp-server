@@ -82,10 +82,10 @@ function TestSuite:run(): { TestResult }
 				local completed = false
 
 				spawn(function()
-					local success, err = coroutine.resume(testThread)
+					local resumeSuccess, resumeErr = coroutine.resume(testThread)
 					completed = true
-					if not success then
-						error(err)
+					if not resumeSuccess then
+						error(resumeErr)
 					end
 				end)
 

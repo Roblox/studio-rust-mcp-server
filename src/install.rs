@@ -191,12 +191,12 @@ pub async fn install() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 pub async fn install() -> Result<()> {
-    use zenity_dialog::Dialog;
+    use zenity_dialog::dialog::ZenityDialog;
 
     match install_internal().await {
         Ok(msg) => {
             // Try to show a GUI dialog with zenity
-            let _ = Dialog::info()
+            let _ = ZenityDialog::info()
                 .title("Roblox Studio MCP")
                 .text(&msg)
                 .width(600)
