@@ -56,20 +56,24 @@ The installer automatically configures Cursor, but you can also set it up manual
 ## 🛠️ Available Tools
 
 ### `run_code`
+
 Execute Luau scripts in Roblox Studio.
 
 **Example**:
-```
+
+```text
 Create a script that spawns a part at the player's position when they click
 ```
 
 **Response**: Generates and executes a complete Luau script in Studio.
 
 ### `insert_model`
+
 Import models from the Roblox Marketplace.
 
 **Example**:
-```
+
+```text
 Import a basic house model for my game
 ```
 
@@ -82,6 +86,7 @@ Import a basic house model for my game
 **Prompt**: "Create a player spawn script that gives new players a sword tool"
 
 **What happens**:
+
 1. Cursor generates the Luau code
 2. MCP server executes it in Roblox Studio
 3. You see the script in ServerScriptService
@@ -92,6 +97,7 @@ Import a basic house model for my game
 **Prompt**: "Add a car model to my game"
 
 **What happens**:
+
 1. Cursor searches for car models
 2. MCP server imports the selected model
 3. Model appears in your Studio workspace
@@ -102,6 +108,7 @@ Import a basic house model for my game
 **Prompt**: "Create a GUI system with a health bar and inventory"
 
 **What happens**:
+
 1. Cursor generates multiple scripts
 2. Creates GUI elements in StarterGui
 3. Sets up LocalScripts for client-side interaction
@@ -113,7 +120,7 @@ Import a basic house model for my game
 
 Create a `.cursorrules` file in your project root:
 
-```
+```text
 # Roblox Studio MCP Integration
 - Use the run_code tool for all Luau script generation
 - Always include proper error handling in scripts
@@ -141,17 +148,20 @@ For team projects, create a `mcp-config.json`:
 
 ### Common Issues
 
-**1. Cursor not detecting MCP server**
+#### 1. Cursor not detecting MCP server
+
 - Restart Cursor completely
 - Check the MCP configuration in settings
 - Verify the server executable path
 
-**2. Scripts not executing in Studio**
+#### 2. Scripts not executing in Studio
+
 - Ensure Roblox Studio is running
 - Check the MCP plugin is enabled
 - Look for errors in Studio console
 
-**3. Models not importing**
+#### 3. Models not importing
+
 - Verify internet connection
 - Check marketplace permissions
 - Ensure model IDs are valid
@@ -169,18 +179,21 @@ Check Cursor's developer console for MCP communication logs.
 ## 🎨 Best Practices
 
 ### Code Generation
+
 - Always specify script type (ServerScript vs LocalScript)
 - Include error handling and validation
 - Use proper Roblox services and APIs
 - Add comments for complex logic
 
-### Model Importing
+### Model Importing Best Practices
+
 - Specify model requirements clearly
 - Consider performance implications
 - Test models in different scenarios
 - Document model usage
 
 ### Workflow Integration
+
 - Use Cursor's chat for quick iterations
 - Leverage code completion for Roblox APIs
 - Combine multiple tools for complex features
