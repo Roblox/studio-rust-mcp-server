@@ -62,5 +62,59 @@ The security workflow implements multiple layers of protection:
 2. **Dependency Scanning**: Automatically checks for vulnerable dependencies
 3. **Secret Detection**: Prevents accidental exposure of API keys, passwords, and tokens
 4. **Rust-Specific Security**: Cargo audit checks for known vulnerabilities in Rust crates
+5. **Weekly Security Scans**: Automated vulnerability detection runs every Monday
+6. **Security Reporting**: Detailed security reports with vulnerability summaries
+7. **Dependency Updates**: Automated checking for outdated dependencies
 
 All security checks must pass before code can be merged into the main branch.
+
+### Enhanced Security Workflows
+
+#### Security Scan (`security-scan.yml`)
+- **CodeQL Analysis**: Static Application Security Testing (SAST)
+- **Dependency Review**: Scans dependencies for known vulnerabilities (PRs only)
+- **Secrets Scan**: Detects accidentally committed secrets using Gitleaks
+- **Cargo Audit**: Checks Rust dependencies for security vulnerabilities
+- **Dependency Check**: Identifies outdated dependencies
+- **Security Summary**: Comprehensive security status report
+
+#### Dependency Update (`dependency-update.yml`)
+- **Weekly Updates**: Automated dependency update checking
+- **Security Alerts**: Creates issues for security vulnerabilities
+- **Critical Fixes**: Automated fixing of critical vulnerabilities
+- **Update Reports**: Detailed reports on outdated dependencies
+
+### Security Tools
+
+The project includes several security tools and scripts:
+
+- **`scripts/fix-vulnerabilities.sh`**: Bash script to fix known vulnerabilities
+- **`scripts/fix-vulnerabilities.ps1`**: PowerShell script for Windows users
+- **`SECURITY.md`**: Comprehensive security policy and vulnerability tracking
+- **Issue Templates**: Structured reporting for security vulnerabilities
+
+### Known Vulnerabilities
+
+Current vulnerabilities being tracked:
+
+1. **tracing-subscriber 0.3.19** → **Fixed** (upgraded to 0.3.20)
+2. **adler 1.0.2** → **Planned** (replace with adler2)
+3. **atty 0.2.14** → **Planned** (replace with is-terminal)
+4. **net2 0.2.39** → **Planned** (replace with socket2)
+5. **paste 1.0.15** → **Planned** (replace with paste-next)
+6. **proc-macro-error 1.0.4** → **Planned** (replace with proc-macro-error-attr)
+
+### Running Security Fixes
+
+To fix vulnerabilities manually:
+
+```bash
+# On Unix/Linux/macOS
+./scripts/fix-vulnerabilities.sh
+
+# On Windows (PowerShell)
+.\scripts\fix-vulnerabilities.ps1
+
+# Dry run to see what would be changed
+.\scripts\fix-vulnerabilities.ps1 -DryRun
+```

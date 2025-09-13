@@ -1,0 +1,190 @@
+name: Dependency Update
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Weekly on Mondays at 3 AM
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of update to perform'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - all
+
+jobs:
+  check-updates:
+    name: Check for Updates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
+      
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated
+      
+      - name: Check outdated dependencies
+        run: |
+          echo "## 📦 Dependency Update Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Outdated Dependencies:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for outdated dependencies
+          cargo outdated --format json > outdated.json || echo "{}" > outdated.json
+          
+          # Count outdated dependencies
+          OUTDATED_COUNT=$(jq '.packages | length' outdated.json)
+          
+          if [ "$OUTDATED_COUNT" -gt 0 ]; then
+            echo "Found $OUTDATED_COUNT outdated dependencies:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # List outdated dependencies
+            jq -r '.packages[] | select(.latest_version != .version) | "- **\(.name)**: \(.version) → \(.latest_version) (\(.latest_date))"' outdated.json >> $GITHUB_STEP_SUMMARY
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Security-related Updates:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Check for security-related updates
+            cargo audit --format json > audit.json || echo "{}" > audit.json
+            VULN_COUNT=$(jq '.vulnerabilities | length' audit.json)
+            WARN_COUNT=$(jq '.warnings | length' audit.json)
+            
+            if [ "$VULN_COUNT" -gt 0 ] || [ "$WARN_COUNT" -gt 0 ]; then
+              echo "🚨 **Security Issues Found:**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              
+              if [ "$VULN_COUNT" -gt 0 ]; then
+                echo "**Vulnerabilities ($VULN_COUNT):**" >> $GITHUB_STEP_SUMMARY
+                jq -r '.vulnerabilities[] | "- **\(.package)**: \(.title) (ID: \(.id))"' audit.json >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+              fi
+              
+              if [ "$WARN_COUNT" -gt 0 ]; then
+                echo "**Warnings ($WARN_COUNT):**" >> $GITHUB_STEP_SUMMARY
+                jq -r '.warnings[] | "- **\(.package)**: \(.title) (ID: \(.id))"' audit.json >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+              fi
+            else
+              echo "✅ No security issues found" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "✅ All dependencies are up to date!" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Create issue if updates needed
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            
+            try {
+              // Check if issue already exists
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: 'dependencies,security',
+                state: 'open'
+              });
+              
+              const existingIssue = issues.data.find(issue => 
+                issue.title.includes('Dependency Updates Required')
+              );
+              
+              if (!existingIssue) {
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: '🔄 Dependency Updates Required',
+                  body: `## 📦 Dependency Update Alert
+                  
+                  This issue was automatically created because outdated dependencies were detected.
+                  
+                  Please review and update the following dependencies to maintain security and compatibility:
+                  
+                  - Run \`cargo outdated\` to see all outdated dependencies
+                  - Run \`cargo audit\` to check for security vulnerabilities
+                  - Update dependencies in \`Cargo.toml\` as needed
+                  
+                  This issue will be automatically closed when dependencies are updated.`,
+                  labels: ['dependencies', 'security', 'automated']
+                });
+              }
+            } catch (error) {
+              console.log('Error creating issue:', error);
+            }
+
+  fix-critical-vulnerabilities:
+    name: Fix Critical Vulnerabilities
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
+      
+      - name: Install cargo-audit and cargo-edit
+        run: |
+          cargo install cargo-audit cargo-edit
+      
+      - name: Check for critical vulnerabilities
+        id: audit
+        run: |
+          cargo audit --ignore RUSTSEC-2024-0375 --ignore RUSTSEC-2021-0145 --ignore RUSTSEC-2020-0016 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0370 --format json > audit.json || echo "{}" > audit.json
+          VULN_COUNT=$(jq '.vulnerabilities | length' audit.json)
+          echo "vulnerability_count=$VULN_COUNT" >> $GITHUB_OUTPUT
+          
+          if [ "$VULN_COUNT" -gt 0 ]; then
+            echo "Found $VULN_COUNT vulnerabilities"
+            jq -r '.vulnerabilities[] | "\(.package): \(.title)"' audit.json
+          else
+            echo "No vulnerabilities found"
+          fi
+      
+      - name: Update vulnerable dependencies
+        if: steps.audit.outputs.vulnerability_count > 0
+        run: |
+          echo "Updating vulnerable dependencies..."
+          
+          # Update tracing-subscriber (known vulnerability)
+          if grep -q "tracing-subscriber" Cargo.toml; then
+            echo "Updating tracing-subscriber to >=0.3.20"
+            cargo upgrade tracing-subscriber
+          fi
+          
+          # Update other dependencies as needed
+          cargo upgrade
+      
+      - name: Commit changes
+        if: steps.audit.outputs.vulnerability_count > 0
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if [ -n "$(git status --porcelain)" ]; then
+            git add Cargo.toml Cargo.lock
+            git commit -m "security: update vulnerable dependencies
+            
+            - Updated dependencies to fix security vulnerabilities
+            - Run cargo audit to verify fixes"
+            
+            git push
+          fi

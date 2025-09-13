@@ -1,0 +1,56 @@
+name: Code Quality Summary
+
+on:
+  workflow_run:
+    workflows: ["Code Quality Checks"]
+    types: [completed]
+
+jobs:
+  quality-summary:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion != 'success' }}
+    steps:
+      - name: Generate Quality Report
+        run: |
+          echo "## 📊 Code Quality Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Status: ❌ Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "One or more quality checks failed. Please review the following:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Clippy**: Check for Rust linting issues" >> $GITHUB_STEP_SUMMARY
+          echo "2. **Format**: Ensure code is properly formatted" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Selene**: Luau linting for plugin code" >> $GITHUB_STEP_SUMMARY
+          echo "4. **StyLua**: Luau formatting for plugin code" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Fixes:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "```bash" >> $GITHUB_STEP_SUMMARY
+          echo "# Fix formatting" >> $GITHUB_STEP_SUMMARY
+          echo "cargo fmt" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Fix clippy issues" >> $GITHUB_STEP_SUMMARY
+          echo "cargo clippy --fix --allow-dirty --allow-staged" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Fix Luau formatting" >> $GITHUB_STEP_SUMMARY
+          echo "cd plugin && stylua ." >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+
+  quality-success:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Generate Success Report
+        run: |
+          echo "## ✅ Code Quality Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Status: ✅ All Checks Passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Clippy | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Format | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Selene | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| StyLua | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 All code quality checks passed successfully!" >> $GITHUB_STEP_SUMMARY

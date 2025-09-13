@@ -210,8 +210,7 @@ impl RBXStudioServer {
         &self,
         Parameters(args): Parameters<Fetch>,
     ) -> Result<CallToolResult, ErrorData> {
-        self.generic_tool_run(ToolArgumentValues::Fetch(args))
-            .await
+        self.generic_tool_run(ToolArgumentValues::Fetch(args)).await
     }
 
     async fn generic_tool_run(
@@ -223,9 +222,7 @@ impl RBXStudioServer {
             ToolArgumentValues::Search(search_args) => {
                 self.handle_search(search_args.query.clone()).await
             }
-            ToolArgumentValues::Fetch(fetch_args) => {
-                self.handle_fetch(fetch_args.id.clone()).await
-            }
+            ToolArgumentValues::Fetch(fetch_args) => self.handle_fetch(fetch_args.id.clone()).await,
             _ => {
                 // For other tools, use the existing Roblox Studio integration
                 let (command, id) = ToolArguments::new(args);
@@ -237,9 +234,9 @@ impl RBXStudioServer {
                     state.output_map.insert(id, tx);
                     state.trigger.clone()
                 };
-                trigger
-                    .send(())
-                    .map_err(|e| ErrorData::internal_error(format!("Unable to trigger send {e}"), None))?;
+                trigger.send(()).map_err(|e| {
+                    ErrorData::internal_error(format!("Unable to trigger send {e}"), None)
+                })?;
                 let result = rx
                     .recv()
                     .await
@@ -259,13 +256,16 @@ impl RBXStudioServer {
 
     async fn handle_search(&self, query: String) -> Result<CallToolResult, ErrorData> {
         tracing::debug!("Handling search query: {}", query);
-        
+
         // Search for Roblox Studio code and models based on query
         let query_lower = query.to_lowercase();
         let mut results = Vec::new();
-        
+
         // Code-related searches
-        if query_lower.contains("script") || query_lower.contains("code") || query_lower.contains("luau") {
+        if query_lower.contains("script")
+            || query_lower.contains("code")
+            || query_lower.contains("luau")
+        {
             results.extend(vec![
                 SearchResult {
                     id: "player-spawn-script".to_string(),
@@ -284,9 +284,13 @@ impl RBXStudioServer {
                 },
             ]);
         }
-        
+
         // Testing-related searches
-        if query_lower.contains("test") || query_lower.contains("unit") || query_lower.contains("tdd") || query_lower.contains("mock") {
+        if query_lower.contains("test")
+            || query_lower.contains("unit")
+            || query_lower.contains("tdd")
+            || query_lower.contains("mock")
+        {
             results.extend(vec![
                 SearchResult {
                     id: "unit-testing-basic".to_string(),
@@ -306,13 +310,17 @@ impl RBXStudioServer {
                 SearchResult {
                     id: "module-reloading".to_string(),
                     title: "Module Reloading for Testing".to_string(),
-                    url: "https://create.roblox.com/docs/scripting/testing/module-reload".to_string(),
+                    url: "https://create.roblox.com/docs/scripting/testing/module-reload"
+                        .to_string(),
                 },
             ]);
         }
-        
+
         // Model-related searches
-        if query_lower.contains("model") || query_lower.contains("part") || query_lower.contains("building") {
+        if query_lower.contains("model")
+            || query_lower.contains("part")
+            || query_lower.contains("building")
+        {
             results.extend(vec![
                 SearchResult {
                     id: "basic-house-model".to_string(),
@@ -331,9 +339,12 @@ impl RBXStudioServer {
                 },
             ]);
         }
-        
+
         // Animation and UI searches
-        if query_lower.contains("animation") || query_lower.contains("ui") || query_lower.contains("gui") {
+        if query_lower.contains("animation")
+            || query_lower.contains("ui")
+            || query_lower.contains("gui")
+        {
             results.extend(vec![
                 SearchResult {
                     id: "walk-animation".to_string(),
@@ -347,7 +358,7 @@ impl RBXStudioServer {
                 },
             ]);
         }
-        
+
         // If no specific matches, return general Roblox Studio resources
         if results.is_empty() {
             results.extend(vec![
@@ -370,15 +381,16 @@ impl RBXStudioServer {
         }
 
         let search_results = SearchResults { results };
-        let json_result = serde_json::to_string(&search_results)
-            .map_err(|e| ErrorData::internal_error(format!("Failed to serialize search results: {e}"), None))?;
+        let json_result = serde_json::to_string(&search_results).map_err(|e| {
+            ErrorData::internal_error(format!("Failed to serialize search results: {e}"), None)
+        })?;
 
         Ok(CallToolResult::success(vec![Content::text(json_result)]))
     }
 
     async fn handle_fetch(&self, id: String) -> Result<CallToolResult, ErrorData> {
         tracing::debug!("Handling fetch request for ID: {}", id);
-        
+
         // Return actual code snippets and model information for Roblox Studio
         let document = match id.as_str() {
             // Code examples
@@ -975,7 +987,7 @@ return {suite}"#.to_string(),
             _ => Document {
                 id: id.clone(),
                 title: "Resource Not Found".to_string(),
-                text: format!("The requested resource '{}' was not found. Available resources include code examples, model information, and comprehensive unit testing examples for Roblox Studio development.", id),
+                text: format!("The requested resource '{id}' was not found. Available resources include code examples, model information, and comprehensive unit testing examples for Roblox Studio development."),
                 url: "https://create.roblox.com/docs/".to_string(),
                 metadata: Some({
                     let mut meta = serde_json::Map::new();
@@ -986,8 +998,9 @@ return {suite}"#.to_string(),
             },
         };
 
-        let json_result = serde_json::to_string(&document)
-            .map_err(|e| ErrorData::internal_error(format!("Failed to serialize document: {e}"), None))?;
+        let json_result = serde_json::to_string(&document).map_err(|e| {
+            ErrorData::internal_error(format!("Failed to serialize document: {e}"), None)
+        })?;
 
         Ok(CallToolResult::success(vec![Content::text(json_result)]))
     }

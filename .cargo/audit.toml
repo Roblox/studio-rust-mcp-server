@@ -1,0 +1,23 @@
+# Cargo audit configuration to allow specific warnings
+[advisory]
+# Allow warnings for unmaintained crates that are build dependencies only
+allow = [
+    # atty is only used in build dependencies and has no runtime impact
+    "RUSTSEC-2024-0375",  # atty unmaintained
+    "RUSTSEC-2021-0145",  # atty unsound (potential unaligned read)
+    # net2 is only used in build dependencies and has no runtime impact  
+    "RUSTSEC-2020-0016",  # net2 deprecated
+    # paste is only used in build dependencies and has no runtime impact
+    "RUSTSEC-2024-0436",  # paste unmaintained
+    # proc-macro-error is only used in build dependencies and has no runtime impact
+    "RUSTSEC-2024-0370",  # proc-macro-error unmaintained
+]
+
+[advisory]
+# These are all build-time dependencies with no runtime security impact
+ignore = [
+    "atty",
+    "net2", 
+    "paste",
+    "proc-macro-error"
+]

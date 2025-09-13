@@ -110,7 +110,11 @@ pub fn install_to_config<'a>(
 }
 
 async fn install_internal() -> Result<String> {
+    #[cfg(feature = "roblox-integration")]
     let plugin_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/MCPStudioPlugin.rbxm"));
+
+    #[cfg(not(feature = "roblox-integration"))]
+    let plugin_bytes = &[];
     let studio = RobloxStudio::locate()?;
     let plugins = studio.plugins_path();
     if let Err(err) = fs::create_dir(plugins) {
@@ -187,8 +191,8 @@ pub async fn install() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 pub async fn install() -> Result<()> {
-    use zenity_dialog::{InfoDialog, ErrorDialog};
-    
+    use zenity_dialog::{ErrorDialog, InfoDialog};
+
     match install_internal().await {
         Ok(msg) => {
             // Try to show a GUI dialog with zenity
@@ -198,13 +202,13 @@ pub async fn install() -> Result<()> {
                 .width(600)
                 .height(400)
                 .show();
-            
+
             // Fallback to terminal output
             println!("{}", msg);
         }
         Err(e) => {
             let error_msg = format!("Errors occurred: {:#}", e);
-            
+
             // Try to show error dialog with zenity
             let _ = ErrorDialog::new()
                 .title("Roblox Studio MCP Error")
@@ -212,7 +216,7 @@ pub async fn install() -> Result<()> {
                 .width(600)
                 .height(400)
                 .show();
-            
+
             // Fallback to terminal output
             eprintln!("{}", error_msg);
         }
