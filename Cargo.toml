@@ -24,6 +24,9 @@ native-dialog = "0.8.8"
 security-translocate = "0.2.1"
 core-foundation = "0.10.0"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+zenity-dialog = "0.3.6"
+
 [build-dependencies]
 rojo = "7.4.4"
 
@@ -31,3 +34,8 @@ rojo = "7.4.4"
 name = "RobloxStudioMCP"
 description = "Model Context Protocol server for Roblox Studio"
 identifier = "com.rbx-mcp.server"
+
+[package.metadata.release]
+pre-release-commit-message = "chore: release {{version}}"
+tag-message = "Release {{version}}"
+tag-prefix = "v"

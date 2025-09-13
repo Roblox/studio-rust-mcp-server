@@ -64,6 +64,11 @@ The server consists of:
 
 Download pre-built binaries from the [releases page](https://github.com/Roblox/studio-rust-mcp-server/releases).
 
+**Supported Platforms:**
+- Windows (x86_64)
+- macOS (x86_64, ARM64)
+- Linux (x86_64, ARM64) - [Linux Build Guide](docs/linux-builds.md)
+
 ## 📚 Implementation Guides
 
 Choose your AI assistant for detailed setup instructions:
@@ -172,6 +177,8 @@ cargo fmt
 ### Technical Documentation
 - [API Reference](docs/api.md) - Complete API documentation
 - [Plugin Development](docs/plugin.md) - Studio plugin architecture
+- [Linux Builds](docs/linux-builds.md) - Linux installation and build guide
+- [Unit Testing](docs/unit-testing.md) - Testing framework documentation
 - [Documentation Overview](docs/README.md) - All documentation in one place
 
 ### Additional Resources

@@ -34,6 +34,11 @@ fn get_claude_config() -> Result<PathBuf> {
         Path::new(&app_data)
             .join("Claude")
             .join("claude_desktop_config.json")
+    } else if cfg!(target_os = "linux") {
+        Path::new(&home_dir.unwrap())
+            .join(".config")
+            .join("claude")
+            .join("claude_desktop_config.json")
     } else {
         return Err(eyre!("Unsupported operating system"));
     };
@@ -180,7 +185,42 @@ pub async fn install() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(target_os = "linux")]
+pub async fn install() -> Result<()> {
+    use zenity_dialog::{InfoDialog, ErrorDialog};
+    
+    match install_internal().await {
+        Ok(msg) => {
+            // Try to show a GUI dialog with zenity
+            let _ = InfoDialog::new()
+                .title("Roblox Studio MCP")
+                .text(&msg)
+                .width(600)
+                .height(400)
+                .show();
+            
+            // Fallback to terminal output
+            println!("{}", msg);
+        }
+        Err(e) => {
+            let error_msg = format!("Errors occurred: {:#}", e);
+            
+            // Try to show error dialog with zenity
+            let _ = ErrorDialog::new()
+                .title("Roblox Studio MCP Error")
+                .text(&error_msg)
+                .width(600)
+                .height(400)
+                .show();
+            
+            // Fallback to terminal output
+            eprintln!("{}", error_msg);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub async fn install() -> Result<()> {
     install_internal().await?;
     Ok(())

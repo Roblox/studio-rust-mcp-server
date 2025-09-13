@@ -2325,6 +2325,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "zenity-dialog",
 ]
 
 [[package]]
@@ -4113,6 +4114,16 @@ dependencies = [
  "quote 1.0.40",
  "syn 2.0.101",
  "synstructure",
+]
+
+[[package]]
+name = "zenity-dialog"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e58a030e8e052cb54f6793de1b5e1e1489825704c9ac41b6f06ab25d4bfee118"
+dependencies = [
+ "anyhow",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

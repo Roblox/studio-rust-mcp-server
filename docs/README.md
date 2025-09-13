@@ -13,6 +13,9 @@ This directory contains comprehensive documentation for the Roblox Studio MCP Se
 - **[API Reference](api.md)** - Complete API documentation
 - **[Plugin Development](plugin.md)** - Studio plugin architecture and development
 - **[Unit Testing Framework](unit-testing.md)** - Comprehensive testing guide with TDD support
+- **[Linux Builds](linux-builds.md)** - Linux installation and build guide
+- **[Linux Implementation](LINUX_BUILD_IMPLEMENTATION.md)** - Linux build implementation details
+- **[Unit Testing Implementation](unit-testing-implementation-summary.md)** - Unit testing implementation summary
 
 ### Additional Resources
 - **[MCP Protocol](https://modelcontextprotocol.io/)** - Official MCP documentation
