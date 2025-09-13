@@ -4,6 +4,10 @@ on:
   - push
   - pull_request
 
+env:
+  ACTIONS_RUNNER_DEBUG: true
+  ACTIONS_STEP_DEBUG: true
+
 jobs:
   clippy:
     runs-on: ubuntu-latest

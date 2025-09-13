@@ -9,6 +9,8 @@ on:
   workflow_dispatch:
 
 env:
+  ACTIONS_RUNNER_DEBUG: true
+  ACTIONS_STEP_DEBUG: true
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
