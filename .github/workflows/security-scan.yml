@@ -7,11 +7,76 @@ on:
         - main
 
 jobs:
-    security:
-        name: OSS Security SAST
-        uses: Roblox/security-workflows/.github/workflows/oss-security-sast.yaml@main
-        with:
-            skip-ossf: true
-        secrets:
-            GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_KEY }}
-            ROBLOX_SEMGREP_GHC_POC_APP_TOKEN: ${{ secrets.ROBLOX_SEMGREP_GHC_POC_APP_TOKEN }}
+    codeql-analysis:
+        name: CodeQL Analysis
+        runs-on: ubuntu-latest
+        permissions:
+            actions: read
+            contents: read
+            security-events: write
+
+        strategy:
+            fail-fast: false
+            matrix:
+                language: [ 'rust' ]
+
+        steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        - name: Initialize CodeQL
+          uses: github/codeql-action/init@v3
+          with:
+            languages: ${{ matrix.language }}
+            queries: security-extended,security-and-quality
+
+        - name: Autobuild
+          uses: github/codeql-action/autobuild@v3
+
+        - name: Perform CodeQL Analysis
+          uses: github/codeql-action/analyze@v3
+          with:
+            category: "/language:${{matrix.language}}"
+
+    dependency-review:
+        name: Dependency Review
+        runs-on: ubuntu-latest
+        if: github.event_name == 'pull_request'
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
+          - name: Dependency Review
+            uses: actions/dependency-review-action@v4
+
+    secrets-scan:
+        name: Secrets Scan
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+
+          - name: Run Gitleaks
+            uses: gitleaks/gitleaks-action@v2
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_KEY }}
+
+    cargo-audit:
+        name: Cargo Audit
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
+          
+          - name: Install Rust
+            uses: dtolnay/rust-toolchain@stable
+            with:
+              components: rust-src
+          
+          - name: Install cargo-audit
+            run: cargo install cargo-audit
+          
+          - name: Run cargo audit
+            run: cargo audit
