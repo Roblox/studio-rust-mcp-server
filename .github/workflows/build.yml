@@ -61,7 +61,7 @@ jobs:
       - name: Sign windows binary
         run: |
           echo "Skipping Windows signing - signing script not found"
-          mkdir -p output
+          if (-not (Test-Path output)) { New-Item -ItemType Directory -Path output }
           copy target\release\rbx-studio-mcp.exe output\rbx-studio-mcp.exe
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -79,7 +79,7 @@ jobs:
     if:  ${{ github.ref_name == github.event.repository.default_branch }}
     needs: [build-macos, build-windows]
     steps:
-      - run: mkdir -p output
+      - run: mkdir -p output || true
       - uses: actions/download-artifact@v4
         with:
           path: output
