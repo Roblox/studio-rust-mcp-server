@@ -68,49 +68,50 @@ function TestSuite:run(): {TestResult}
         local startTime = tick()
         
         -- Run beforeEach if exists
+        local shouldSkip = false
         if self.beforeEach then
             local success, err = pcall(self.beforeEach)
             if not success then
                 table.insert(results, TestResult.new(test.name, false, "beforeEach failed: " .. tostring(err), tick() - startTime))
-                goto continue
+                shouldSkip = true
             end
         end
         
-        -- Run the actual test
-        local success, err = pcall(function()
-            -- Set up timeout
-            local testThread = coroutine.create(test.func)
-            local completed = false
-            
-            spawn(function()
-                local success, err = coroutine.resume(testThread)
-                completed = true
-                if not success then
-                    error(err)
+        -- Run the actual test only if beforeEach didn't fail
+        if not shouldSkip then
+            local success, err = pcall(function()
+                -- Set up timeout
+                local testThread = coroutine.create(test.func)
+                local completed = false
+                
+                spawn(function()
+                    local success, err = coroutine.resume(testThread)
+                    completed = true
+                    if not success then
+                        error(err)
+                    end
+                end)
+                
+                -- Wait for completion or timeout
+                local startWait = tick()
+                while not completed and (tick() - startWait) < test.timeout do
+                    wait(0.1)
+                end
+                
+                if not completed then
+                    error("Test timed out after " .. test.timeout .. " seconds")
                 end
             end)
             
-            -- Wait for completion or timeout
-            local startWait = tick()
-            while not completed and (tick() - startWait) < test.timeout do
-                wait(0.1)
+            local duration = tick() - startTime
+            
+            -- Run afterEach if exists
+            if self.afterEach then
+                pcall(self.afterEach)
             end
             
-            if not completed then
-                error("Test timed out after " .. test.timeout .. " seconds")
-            end
-        end)
-        
-        local duration = tick() - startTime
-        
-        -- Run afterEach if exists
-        if self.afterEach then
-            pcall(self.afterEach)
+            table.insert(results, TestResult.new(test.name, success, success and "Test passed" or tostring(err), duration))
         end
-        
-        table.insert(results, TestResult.new(test.name, success, success and "Test passed" or tostring(err), duration))
-        
-        ::continue::
     end
     
     -- Run afterAll if exists

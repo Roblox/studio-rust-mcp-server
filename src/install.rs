@@ -191,12 +191,12 @@ pub async fn install() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 pub async fn install() -> Result<()> {
-    use zenity_dialog::{ErrorDialog, InfoDialog};
+    use zenity_dialog::{Dialog, DialogType};
 
     match install_internal().await {
         Ok(msg) => {
             // Try to show a GUI dialog with zenity
-            let _ = InfoDialog::new()
+            let _ = Dialog::new(DialogType::Info)
                 .title("Roblox Studio MCP")
                 .text(&msg)
                 .width(600)
@@ -210,7 +210,7 @@ pub async fn install() -> Result<()> {
             let error_msg = format!("Errors occurred: {:#}", e);
 
             // Try to show error dialog with zenity
-            let _ = ErrorDialog::new()
+            let _ = Dialog::new(DialogType::Error)
                 .title("Roblox Studio MCP Error")
                 .text(&error_msg)
                 .width(600)
