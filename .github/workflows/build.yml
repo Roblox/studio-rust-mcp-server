@@ -11,8 +11,49 @@ permissions:
   contents: write
 
 jobs:
+  selene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install selene
+        run: |
+          curl -L https://github.com/Kampfkarren/selene/releases/latest/download/selene-linux.zip -o selene.zip
+          unzip selene.zip
+          sudo mv selene /usr/local/bin/selene
+          sudo chmod +x /usr/local/bin/selene
+      - name: Run selene
+        run: |
+          cd plugin
+          selene .
+
+  stylua:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install StyLua
+        run: |
+          curl -L https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux.zip -o stylua.zip
+          unzip stylua.zip
+          sudo mv stylua /usr/local/bin/stylua
+          sudo chmod +x /usr/local/bin/stylua
+      - name: Run StyLua
+        run: |
+          cd plugin
+          stylua . --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Run cargo clippy
+        run: cargo clippy -- -D warnings
   build-macos:
     runs-on: macos-latest
+    needs: [selene, stylua, clippy]
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -24,8 +65,10 @@ jobs:
           cargo install cargo-bundle cargo-edit
           cargo set-version --workspace "$CARGO_PKG_VERSION"
           rustup target add x86_64-apple-darwin aarch64-apple-darwin
-          cargo build --release --target aarch64-apple-darwin  --target x86_64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin --target x86_64-apple-darwin
           cargo bundle --release --target aarch64-apple-darwin
+          # Create universal binary
+          mkdir -p "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/"
           lipo -create target/aarch64-apple-darwin/release/rbx-studio-mcp target/x86_64-apple-darwin/release/rbx-studio-mcp -output "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"
       - name: Sign and Notarize macOS binary
         run: |
@@ -46,6 +89,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    needs: [selene, stylua, clippy]
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -56,13 +100,17 @@ jobs:
         run: |
           cargo install cargo-edit
           cargo set-version --workspace "$CARGO_PKG_VERSION"
-          mkdir output
           cargo build --release
-      - name: Sign windows binary
+      - name: Prepare artifacts
         run: |
-          echo "Skipping Windows signing - signing script not found"
+          echo "Preparing Windows build artifacts"
           if (-not (Test-Path output)) { New-Item -ItemType Directory -Path output }
-          copy target\release\rbx-studio-mcp.exe output\rbx-studio-mcp.exe
+          if (Test-Path target\release\rbx-studio-mcp.exe) {
+              copy target\release\rbx-studio-mcp.exe output\rbx-studio-mcp.exe
+          } else {
+              Write-Error "Build artifact not found: target\release\rbx-studio-mcp.exe"
+              exit 1
+          }
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -76,17 +124,22 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    if:  ${{ github.ref_name == github.event.repository.default_branch }}
+    if: ${{ github.ref_name == github.event.repository.default_branch }}
     needs: [build-macos, build-windows]
     steps:
-      - run: mkdir -p output || true
-      - uses: actions/download-artifact@v4
+      - name: Create output directory
+        run: mkdir -p output
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
           path: output
           merge-multiple: true
+      - name: List artifacts
+        run: ls -la output/
       - name: Create release
         uses: Roblox-ActionsCache/softprops-action-gh-release@v1
         with:
           tag_name: v${{ env.CARGO_PKG_VERSION }}
           release_name: Release v${{ env.CARGO_PKG_VERSION }}
           files: output/*
+          fail_on_unmatched_files: true
