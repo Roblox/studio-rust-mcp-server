@@ -74,9 +74,7 @@ jobs:
       
       - name: Install Selene
         run: |
-          if ! command -v selene &> /dev/null; then
-            cargo install selene
-          fi
+          cargo install selene --locked
       
       - name: Run Selene
         working-directory: plugin
@@ -103,9 +101,7 @@ jobs:
       
       - name: Install StyLua
         run: |
-          if ! command -v stylua &> /dev/null; then
-            cargo install stylua --features luau
-          fi
+          cargo install stylua --features luau --locked
       
       - name: Run StyLua
         working-directory: plugin

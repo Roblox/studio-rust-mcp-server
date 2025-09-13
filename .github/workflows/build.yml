@@ -52,6 +52,7 @@ jobs:
   build-macos:
     runs-on: macos-latest
     needs: [selene, stylua, clippy]
+    if: always() && (needs.selene.result == 'success' && needs.stylua.result == 'success' && needs.clippy.result == 'success')
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -67,7 +68,16 @@ jobs:
           cargo bundle --release --target aarch64-apple-darwin
           # Create universal binary
           mkdir -p "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/"
-          lipo -create target/aarch64-apple-darwin/release/rbx-studio-mcp target/x86_64-apple-darwin/release/rbx-studio-mcp -output "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"
+          if [ -f "target/aarch64-apple-darwin/release/rbx-studio-mcp" ] && [ -f "target/x86_64-apple-darwin/release/rbx-studio-mcp" ]; then
+            lipo -create target/aarch64-apple-darwin/release/rbx-studio-mcp target/x86_64-apple-darwin/release/rbx-studio-mcp -output "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"
+          else
+            echo "Warning: One or both binaries not found, copying available binary"
+            if [ -f "target/aarch64-apple-darwin/release/rbx-studio-mcp" ]; then
+              cp target/aarch64-apple-darwin/release/rbx-studio-mcp "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"
+            elif [ -f "target/x86_64-apple-darwin/release/rbx-studio-mcp" ]; then
+              cp target/x86_64-apple-darwin/release/rbx-studio-mcp "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"
+            fi
+          fi
       - name: Sign and Notarize macOS binary
         run: |
           echo "Skipping macOS signing - signing script not found"
@@ -88,6 +98,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     needs: [selene, stylua, clippy]
+    if: always() && (needs.selene.result == 'success' && needs.stylua.result == 'success' && needs.clippy.result == 'success')
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -122,8 +133,8 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    if: ${{ github.ref_name == github.event.repository.default_branch }}
     needs: [build-macos, build-windows]
+    if: ${{ github.ref_name == github.event.repository.default_branch }} && always() && (needs.build-macos.result == 'success' && needs.build-windows.result == 'success')
     steps:
       - name: Create output directory
         run: mkdir -p output

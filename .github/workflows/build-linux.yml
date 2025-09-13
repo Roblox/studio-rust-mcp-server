@@ -59,8 +59,18 @@ jobs:
     - name: Create release artifacts
       run: |
         mkdir -p release
-        cp target/x86_64-unknown-linux-gnu/release/rbx-studio-mcp release/rbx-studio-mcp-x86_64-unknown-linux-gnu
-        cp target/aarch64-unknown-linux-gnu/release/rbx-studio-mcp release/rbx-studio-mcp-aarch64-unknown-linux-gnu
+        if [ -f target/x86_64-unknown-linux-gnu/release/rbx-studio-mcp ]; then
+          cp target/x86_64-unknown-linux-gnu/release/rbx-studio-mcp release/rbx-studio-mcp-x86_64-unknown-linux-gnu
+        else
+          echo "Error: x86_64 binary not found"
+          exit 1
+        fi
+        if [ -f target/aarch64-unknown-linux-gnu/release/rbx-studio-mcp ]; then
+          cp target/aarch64-unknown-linux-gnu/release/rbx-studio-mcp release/rbx-studio-mcp-aarch64-unknown-linux-gnu
+        else
+          echo "Error: aarch64 binary not found"
+          exit 1
+        fi
         chmod +x release/*
 
     - name: Create checksums
