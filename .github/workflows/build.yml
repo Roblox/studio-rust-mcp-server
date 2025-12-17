@@ -25,6 +25,7 @@ jobs:
           lipo -create target/aarch64-apple-darwin/release/rbx-studio-mcp target/x86_64-apple-darwin/release/rbx-studio-mcp -output "target/aarch64-apple-darwin/release/bundle/osx/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"
       - name: Sign and Notarize macOS binary
         run: ./util/sign.macos.sh
+        if: ${{ github.ref_name == github.event.repository.default_branch }}
         env:
           APPLE_API_KEY: key.p8
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -49,6 +50,7 @@ jobs:
           cargo build --release
       - name: Sign windows binary
         run: ./util/sign.windows.ps1
+        if: ${{ github.ref_name == github.event.repository.default_branch }}
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
