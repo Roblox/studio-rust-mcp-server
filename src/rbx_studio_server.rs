@@ -28,7 +28,7 @@ pub struct ToolArguments {
     id: Option<Uuid>,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct RunCommandResponse {
     response: String,
     id: Uuid,
@@ -36,7 +36,7 @@ pub struct RunCommandResponse {
 
 pub struct AppState {
     process_queue: VecDeque<ToolArguments>,
-    output_map: HashMap<Uuid, mpsc::UnboundedSender<Result<String>>>,
+    output_map: HashMap<Uuid, mpsc::Sender<Result<String>>>,
     waiter: watch::Receiver<()>,
     trigger: watch::Sender<()>,
 }
@@ -143,7 +143,8 @@ impl RBXStudioServer {
     ) -> Result<CallToolResult, ErrorData> {
         let (command, id) = ToolArguments::new(args);
         tracing::debug!("Running command: {:?}", command);
-        let (tx, mut rx) = mpsc::unbounded_channel::<Result<String>>();
+        // Bounded channel with capacity 1 - each tool call expects exactly one response
+        let (tx, mut rx) = mpsc::channel::<Result<String>>(1);
         let trigger = {
             let mut state = self.state.lock().await;
             state.process_queue.push_back(command);
@@ -198,12 +199,18 @@ pub async fn response_handler(
     Json(payload): Json<RunCommandResponse>,
 ) -> Result<impl IntoResponse> {
     tracing::debug!("Received reply from studio {payload:?}");
-    let mut state = state.lock().await;
-    let tx = state
-        .output_map
-        .remove(&payload.id)
-        .ok_or_eyre("Unknown ID")?;
-    Ok(tx.send(Ok(payload.response))?)
+    // Remove sender from map while holding lock, then release lock before sending
+    let tx = {
+        let mut state = state.lock().await;
+        state
+            .output_map
+            .remove(&payload.id)
+            .ok_or_eyre("Unknown ID")?
+    };
+    tx.send(Ok(payload.response))
+        .await
+        .map_err(|_| color_eyre::eyre::eyre!("Response channel closed"))?;
+    Ok(())
 }
 
 pub async fn proxy_handler(
@@ -212,7 +219,8 @@ pub async fn proxy_handler(
 ) -> Result<impl IntoResponse> {
     let id = command.id.ok_or_eyre("Got proxy command with no id")?;
     tracing::debug!("Received request to proxy {command:?}");
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    // Bounded channel with capacity 1 - each proxy call expects exactly one response
+    let (tx, mut rx) = mpsc::channel(1);
     {
         let mut state = state.lock().await;
         state.process_queue.push_back(command);
@@ -227,38 +235,58 @@ pub async fn proxy_handler(
     Ok(Json(RunCommandResponse { response, id }))
 }
 
-pub async fn dud_proxy_loop(state: PackedState, exit: Receiver<()>) {
+pub async fn dud_proxy_loop(state: PackedState, mut exit: Receiver<()>) {
     let client = reqwest::Client::new();
+    let mut waiter = state.lock().await.waiter.clone();
 
-    let mut waiter = { state.lock().await.waiter.clone() };
-    while exit.is_empty() {
-        let entry = { state.lock().await.process_queue.pop_front() };
+    loop {
+        // Check for pending work
+        let entry = state.lock().await.process_queue.pop_front();
+
         if let Some(entry) = entry {
+            let Some(id) = entry.id else {
+                tracing::error!("Proxy entry missing ID, skipping");
+                continue;
+            };
+
             let res = client
                 .post(format!("http://127.0.0.1:{STUDIO_PLUGIN_PORT}/proxy"))
                 .json(&entry)
                 .send()
                 .await;
-            if let Ok(res) = res {
-                let tx = {
-                    state
-                        .lock()
-                        .await
-                        .output_map
-                        .remove(&entry.id.unwrap())
-                        .unwrap()
-                };
-                let res = res
-                    .json::<RunCommandResponse>()
-                    .await
-                    .map(|r| r.response)
-                    .map_err(Into::into);
-                tx.send(res).unwrap();
-            } else {
-                tracing::error!("Failed to proxy: {res:?}");
-            };
+
+            match res {
+                Ok(res) => {
+                    let tx = state.lock().await.output_map.remove(&id);
+                    if let Some(tx) = tx {
+                        let res = res
+                            .json::<RunCommandResponse>()
+                            .await
+                            .map(|r| r.response)
+                            .map_err(Into::into);
+                        if tx.send(res).await.is_err() {
+                            tracing::warn!(id = %id, "Response channel closed");
+                        }
+                    } else {
+                        tracing::warn!(id = %id, "No output channel for proxy response");
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to proxy: {e}");
+                }
+            }
         } else {
-            waiter.changed().await.unwrap();
+            // No work available - wait for new work OR exit signal
+            tokio::select! {
+                _ = waiter.changed() => {
+                    // New work may be available, loop back to check
+                }
+                _ = &mut exit => {
+                    // Exit signal received
+                    tracing::debug!("dud_proxy_loop received exit signal");
+                    break;
+                }
+            }
         }
     }
 }
