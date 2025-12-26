@@ -1,4 +1,27 @@
-# Roblox Studio MCP Server
+# Roblox Studio MCP Server (Fork)
+
+This is a fork of [Roblox/studio-rust-mcp-server](https://github.com/Roblox/studio-rust-mcp-server) with performance improvements.
+
+## Fork Maintainer
+
+**Brian Edwards**
+brian.mabry.edwards@gmail.com
+512-584-6841
+Waco, Texas, USA
+
+## Changes from Upstream
+
+- **Fixed high CPU usage** (150%+ idle) caused by `watch::Receiver` clone inside loop in `request_handler`
+- **Fixed busy-wait in `dud_proxy_loop`** - replaced `exit.is_empty()` polling with `tokio::select!`
+- **Replaced unbounded channels** with bounded channels (capacity 1) for backpressure
+- **Replaced panic unwraps** with proper error handling to prevent server crashes
+- **Reduced lock contention** by releasing locks before async channel sends
+
+See [INSTALL.md](INSTALL.md) for installation instructions.
+
+---
+
+## Original README
 
 This repository contains a reference implementation of the Model Context Protocol (MCP) that enables
 communication between Roblox Studio via a plugin and [Claude Desktop](https://claude.ai/download) or [Cursor](https://www.cursor.com/).
