@@ -60,10 +60,28 @@ jobs:
           name: Windows-rbx-studio-mcp
           path: output/rbx-studio-mcp.exe
 
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          cargo install cargo-edit
+          cargo set-version --workspace "$CARGO_PKG_VERSION"
+          cargo build --release
+          mkdir -p output
+          cp target/release/rbx-studio-mcp output/
+          cd output && zip rbx-studio-mcp-linux.zip rbx-studio-mcp
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Linux-rbx-studio-mcp
+          path: output/rbx-studio-mcp-linux.zip
+
   release:
     runs-on: ubuntu-latest
     if:  ${{ github.ref_name == github.event.repository.default_branch }}
-    needs: [build-macos, build-windows]
+    needs: [build-macos, build-windows, build-linux]
     steps:
       - run: mkdir -p output
       - uses: actions/download-artifact@v4
