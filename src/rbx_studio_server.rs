@@ -19,6 +19,50 @@ use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::Duration;
 use uuid::Uuid;
 
+// Roblox catalog API response structures
+#[derive(Debug, Deserialize)]
+struct CatalogSearchResponse {
+    data: Vec<CatalogItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CatalogItem {
+    id: u64,
+}
+
+/// Search the Roblox catalog for free models and return the first asset ID
+async fn search_roblox_catalog(query: &str) -> std::result::Result<u64, String> {
+    let client = reqwest::Client::new();
+
+    // Category 3 = Models, salesTypeFilter 1 = Free
+    let url = format!(
+        "https://catalog.roblox.com/v1/search/items?category=3&keyword={}&limit=10&salesTypeFilter=1",
+        urlencoding::encode(query)
+    );
+
+    let response = client
+        .get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to search catalog: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Catalog API returned status: {}", response.status()));
+    }
+
+    let catalog: CatalogSearchResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse catalog response: {}", e))?;
+
+    catalog
+        .data
+        .first()
+        .map(|item| item.id)
+        .ok_or_else(|| format!("No free models found matching '{}'. Try a different search term.", query))
+}
+
 pub const STUDIO_PLUGIN_PORT: u16 = 44755;
 const LONG_POLL_DURATION: Duration = Duration::from_secs(15);
 
@@ -99,6 +143,9 @@ struct RunCode {
 struct InsertModel {
     #[schemars(description = "Query to search for the model")]
     query: String,
+    #[serde(skip_deserializing)]
+    #[schemars(skip)]
+    asset_id: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
@@ -131,10 +178,16 @@ impl RBXStudioServer {
     )]
     async fn insert_model(
         &self,
-        Parameters(args): Parameters<InsertModel>,
+        Parameters(mut args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
-        self.generic_tool_run(ToolArgumentValues::InsertModel(args))
-            .await
+        // Search the Roblox catalog from the server side (bypasses Lua HttpService restrictions)
+        match search_roblox_catalog(&args.query).await {
+            Ok(asset_id) => {
+                args.asset_id = Some(asset_id);
+                self.generic_tool_run(ToolArgumentValues::InsertModel(args)).await
+            }
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(e)])),
+        }
     }
 
     async fn generic_tool_run(

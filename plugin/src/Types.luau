@@ -1,5 +1,6 @@
 export type InsertModelArgs = {
 	query: string,
+	asset_id: number?,
 }
 
 export type RunCodeArgs = {

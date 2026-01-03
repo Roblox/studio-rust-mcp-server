@@ -15,6 +15,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 axum = { version = "0.8", features = ["macros"] }
 reqwest = { version = "0.12", features = ["json"] }
+urlencoding = "2.1"
 color-eyre = "0.6"
 clap = { version = "4.5.37", features = ["derive"] }
 roblox_install = "1.0.0"
