@@ -19,6 +19,7 @@ urlencoding = "2.1"
 color-eyre = "0.6"
 clap = { version = "4.5.37", features = ["derive"] }
 roblox_install = "1.0.0"
+base64 = "0.22"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 native-dialog = "0.8.8"
