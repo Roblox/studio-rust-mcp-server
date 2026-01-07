@@ -92,7 +92,7 @@ pub fn install_to_config<'a>(
     if let Some(Value::Object(mcp_servers)) = config.get_mut("mcpServers") {
         mcp_servers.remove("Roblox Studio");
     }
-    
+
     config["mcpServers"]["RobloxStudio"] = json!({
       "command": &exe_path,
       "args": [
