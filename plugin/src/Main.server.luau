@@ -1,6 +1,7 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
 local MockWebSocketService = require(Main.MockWebSocketService)
 local Types = require(Main.Types)
+local OutputCapture = require(Main.OutputCapture)
 
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local HttpService = game:GetService("HttpService")
@@ -33,6 +34,10 @@ local function fetchBuiltinTools()
 end
 
 local tools = fetchBuiltinTools()
+
+-- Initialize output capture (persistent connection to LogService)
+-- This captures all output messages from this point forward
+OutputCapture.initialize()
 
 local function connectWebSocket()
 	local client = MockWebSocketService:CreateClient(URI)
@@ -114,4 +119,13 @@ toggleButton.Click:Connect(function()
 		currentClient = nil
 		print("The MCP Studio plugin is stopped.")
 	end
+end)
+
+-- Clean up resources when plugin unloads to prevent memory leaks
+plugin.Unloading:Connect(function()
+	if currentClient then
+		currentClient:Close()
+		currentClient = nil
+	end
+	OutputCapture.shutdown()
 end)

@@ -67,9 +67,14 @@ local function runCodeWithOutput(command: string): string
 		local strTable = table.create(#clonedTable)
 		for i, arg in clonedTable do
 			local serializedArg = serializeTable(arg)
-			strTable[i] = if typeof(serializedArg) == "table"
-				then HttpService:JSONEncode(serializedArg)
-				else serializedArg
+			if typeof(serializedArg) == "table" then
+				strTable[i] = HttpService:JSONEncode(serializedArg)
+			elseif typeof(serializedArg) == "boolean" then
+				-- Convert booleans to string to avoid concat error
+				strTable[i] = tostring(serializedArg)
+			else
+				strTable[i] = serializedArg
+			end
 		end
 		return strTable
 	end
