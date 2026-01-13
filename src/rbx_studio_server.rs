@@ -116,6 +116,7 @@ impl RBXStudioServer {
     }
 
     #[tool(
+        name = "run_code",
         description = "Runs a command in Roblox Studio and returns the printed output. Can be used to both make changes and retrieve information"
     )]
     async fn run_code(
@@ -127,6 +128,7 @@ impl RBXStudioServer {
     }
 
     #[tool(
+        name = "insert_model",
         description = "Inserts a model from the Roblox marketplace into the workspace. Returns the inserted model name."
     )]
     async fn insert_model(

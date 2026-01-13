@@ -48,6 +48,16 @@ fn get_cursor_config() -> Result<PathBuf> {
     Ok(Path::new(&home_dir).join(".cursor").join("mcp.json"))
 }
 
+fn get_antigravity_config() -> Result<PathBuf> {
+    let home_dir = env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .ok_or_else(|| eyre!("Could not find home directory"))?;
+    Ok(Path::new(&home_dir)
+        .join(".gemini")
+        .join("antigravity")
+        .join("mcp_config.json"))
+}
+
 #[cfg(target_os = "macos")]
 fn get_exe_path() -> Result<PathBuf> {
     use core_foundation::url::CFURL;
@@ -88,7 +98,7 @@ pub fn install_to_config<'a>(
         config.insert("mcpServers".to_string(), json!({}));
     }
 
-    config["mcpServers"]["Roblox Studio"] = json!({
+    config["mcpServers"]["Roblox_Studio"] = json!({
       "command": &exe_path,
       "args": [
         "--stdio"
@@ -134,6 +144,7 @@ async fn install_internal() -> Result<String> {
     let results = vec![
         install_to_config(get_claude_config(), &this_exe, "Claude"),
         install_to_config(get_cursor_config(), &this_exe, "Cursor"),
+        install_to_config(get_antigravity_config(), &this_exe, "Antigravity"),
     ];
 
     let successes: Vec<_> = results
