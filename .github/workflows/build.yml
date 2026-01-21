@@ -1,8 +1,10 @@
 name: Build
 
 on:
-  - push
-  - pull_request
+  pull_request:
+  push:
+    branches:
+      - main
     
 env:
   CARGO_PKG_VERSION: "0.2.${{ github.run_number }}"
@@ -15,6 +17,21 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Get Rust version
+        id: rust-version
+        run: echo "version=$(rustc --version | shasum -a 256 | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+      - name: Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.rustup
+            target
+          key: ${{ runner.os }}-rust-${{ steps.rust-version.outputs.version }}
       - name: Build
         run: |
           cargo install cargo-bundle cargo-edit
@@ -41,6 +58,25 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Get Rust version
+        id: rust-version
+        shell: pwsh
+        run: |
+          $version = (rustc --version | Out-String).Trim()
+          $hash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($version))) -Algorithm SHA256).Hash.ToLower()
+          echo "version=$hash" >> $env:GITHUB_OUTPUT
+      - name: Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.rustup
+            target
+          key: ${{ runner.os }}-rust-${{ steps.rust-version.outputs.version }}
       - name: Build
         run: |
           cargo install cargo-edit

@@ -1,3 +1,8 @@
+# Quick Setup
+1. Download and Run the server: [Windows](https://github.com/Roblox/studio-rust-mcp-server/releases/latest/download/rbx-studio-mcp.exe) or [macOS](https://github.com/Roblox/studio-rust-mcp-server/releases/latest/download/macOS-rbx-studio-mcp.zip)
+2. Restart AI Client (Claude, Cursor, etc) and Roblox Studio
+3. Done!
+
 # Roblox Studio MCP Server
 
 This repository contains a reference implementation of the Model Context Protocol (MCP) that enables

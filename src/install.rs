@@ -98,6 +98,11 @@ pub fn install_to_config<'a>(
         config.insert("mcpServers".to_string(), json!({}));
     }
 
+    // Remove old key if it exists
+    if let Some(Value::Object(mcp_servers)) = config.get_mut("mcpServers") {
+        mcp_servers.remove("Roblox Studio");
+    }
+
     config["mcpServers"]["Roblox_Studio"] = json!({
       "command": &exe_path,
       "args": [
