@@ -27,6 +27,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
             ~/.rustup
             target
           key: ${{ runner.os }}-rust-${{ steps.rust-version.outputs.version }}
@@ -70,6 +72,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
             ~/.rustup
             target
           key: ${{ runner.os }}-rust-${{ steps.rust-version.outputs.version }}
