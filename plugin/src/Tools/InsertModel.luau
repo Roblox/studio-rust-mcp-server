@@ -22,23 +22,6 @@ local function getInsertPosition()
 	end
 end
 
-local InsertService = game:GetService("InsertService")
-
-type GetFreeModelsResponse = {
-	[number]: {
-		CurrentStartIndex: number,
-		TotalCount: number,
-		Results: {
-			[number]: {
-				Name: string,
-				AssetId: number,
-				AssetVersionId: number,
-				CreatorName: string,
-			},
-		},
-	},
-}
-
 local function toTitleCase(str: string): string
 	local function titleCase(first: string, rest: string)
 		return first:upper() .. rest:lower()
@@ -81,28 +64,10 @@ local function loadAsset(assetId: number): Instance?
 	return collapseObjectsIntoContainer(objects)
 end
 
-local function getAssets(query: string): number?
-	local results: GetFreeModelsResponse = InsertService:GetFreeModels(query, 0)
-	local assets = {}
-	for i, result in results[1].Results do
-		if i > 6 then
-			break
-		end
-		table.insert(assets, result.AssetId)
-	end
-
-	return table.remove(assets, 1)
-end
-
-local function insertFromMarketplace(query: string): string
-	local primaryResult = getAssets(query)
-	if not primaryResult then
-		error("Failed to find asset")
-	end
-
-	local instance = loadAsset(primaryResult)
+local function insertFromAssetId(assetId: number, query: string): string
+	local instance = loadAsset(assetId)
 	if not instance then
-		error("Failed to load asset")
+		error("Failed to load asset with ID: " .. tostring(assetId))
 	end
 
 	local name = toTitleCase(query)
@@ -132,7 +97,12 @@ local function handleInsertModel(args: Types.ToolArgs): string?
 		error("Missing query in InsertModel")
 	end
 
-	return insertFromMarketplace(insertModelArgs.query)
+	-- Use asset_id provided by the Rust server (from catalog API)
+	if insertModelArgs.asset_id then
+		return insertFromAssetId(insertModelArgs.asset_id, insertModelArgs.query)
+	else
+		error("No asset_id provided - catalog search must be done server-side")
+	end
 end
 
 return handleInsertModel :: Types.ToolFunction

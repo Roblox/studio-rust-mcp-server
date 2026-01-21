@@ -93,10 +93,46 @@ To make sure everything is set up correctly, follow these steps:
    which you can also verify in the console output.
 1. Verify that Claude Desktop is correctly configured by clicking on the hammer icon for MCP tools
    beneath the text field where you enter prompts. This should open a window with the list of
-   available Roblox Studio tools (`insert_model` and `run_code`).
+   available Roblox Studio tools (`insert_model`, `run_code`, and `capture_screenshot`).
 
 **Note**: You can fix common issues with setup by restarting Studio and Claude Desktop. Claude
 sometimes is hidden in the system tray, so ensure you've exited it completely.
+
+## Available Tools
+
+The MCP server provides the following tools for Claude to interact with Roblox Studio:
+
+### `run_code`
+Runs Luau code in Roblox Studio and returns the printed output. Can be used to make changes or retrieve information from the currently open place.
+
+**Example prompts:**
+- "Add a red part to the workspace"
+- "List all parts in the workspace"
+- "Move the camera to position (0, 50, 50)"
+
+### `insert_model`
+Inserts a model from the Roblox marketplace into the workspace. Returns the inserted model name.
+
+**Example prompts:**
+- "Insert a tree model"
+- "Add a car from the marketplace"
+
+### `capture_screenshot`
+Captures a screenshot of the Roblox Studio window and returns it as base64-encoded PNG data. This allows Claude to visually analyze your workspace, debug UI issues, or verify changes.
+
+**Example prompts:**
+- "Take a screenshot of my workspace"
+- "Show me what the current scene looks like"
+- "Screenshot the studio and analyze the lighting"
+
+**Requirements:**
+- **macOS**: Screen Recording permission must be granted to Terminal (or your MCP client)
+  - Go to **System Settings** → **Privacy & Security** → **Screen Recording**
+  - Enable **Terminal** (or your MCP client application)
+  - Restart Terminal/client after granting permission
+- **Windows**: No additional permissions required
+
+**Note:** The screenshot captures the entire Roblox Studio window, including all panels and UI elements. The Studio window does not need to be focused or in the foreground.
 
 ## Send requests
 
@@ -104,3 +140,10 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Using `insert_model`
+
+The `insert_model` tool searches the Roblox catalog for free models and inserts them into your place. For this to work, your place must have HTTP requests enabled:
+
+1. **Publish your place** — The place must be published to Roblox (it can be private). Go to **File > Publish to Roblox** in Studio.
+2. **Enable HTTP requests** — In Studio, go to **Home > Game Settings > Security** and enable **Allow HTTP Requests**.

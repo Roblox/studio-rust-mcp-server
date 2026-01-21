@@ -2,6 +2,7 @@ use crate::error::Result;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{extract::State, Json};
+use base64::Engine;
 use color_eyre::eyre::{Error, OptionExt};
 use rmcp::{
     handler::server::tool::Parameters,
@@ -18,6 +19,50 @@ use tokio::sync::oneshot::Receiver;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::Duration;
 use uuid::Uuid;
+
+// Roblox catalog API response structures
+#[derive(Debug, Deserialize)]
+struct CatalogSearchResponse {
+    data: Vec<CatalogItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CatalogItem {
+    id: u64,
+}
+
+/// Search the Roblox catalog for free models and return the first asset ID
+async fn search_roblox_catalog(query: &str) -> std::result::Result<u64, String> {
+    let client = reqwest::Client::new();
+
+    // Category 3 = Models, salesTypeFilter 1 = Free
+    let url = format!(
+        "https://catalog.roblox.com/v1/search/items?category=3&keyword={}&limit=10&salesTypeFilter=1",
+        urlencoding::encode(query)
+    );
+
+    let response = client
+        .get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to search catalog: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Catalog API returned status: {}", response.status()));
+    }
+
+    let catalog: CatalogSearchResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse catalog response: {}", e))?;
+
+    catalog
+        .data
+        .first()
+        .map(|item| item.id)
+        .ok_or_else(|| format!("No free models found matching '{}'. Try a different search term.", query))
+}
 
 pub const STUDIO_PLUGIN_PORT: u16 = 44755;
 const LONG_POLL_DURATION: Duration = Duration::from_secs(15);
@@ -99,6 +144,14 @@ struct RunCode {
 struct InsertModel {
     #[schemars(description = "Query to search for the model")]
     query: String,
+    #[serde(skip_deserializing)]
+    #[schemars(skip)]
+    asset_id: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct CaptureScreenshot {
+    // No parameters for v1 - just capture the Studio window
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
@@ -131,10 +184,33 @@ impl RBXStudioServer {
     )]
     async fn insert_model(
         &self,
-        Parameters(args): Parameters<InsertModel>,
+        Parameters(mut args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
-        self.generic_tool_run(ToolArgumentValues::InsertModel(args))
-            .await
+        // Search the Roblox catalog from the server side (bypasses Lua HttpService restrictions)
+        match search_roblox_catalog(&args.query).await {
+            Ok(asset_id) => {
+                args.asset_id = Some(asset_id);
+                self.generic_tool_run(ToolArgumentValues::InsertModel(args)).await
+            }
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(e)])),
+        }
+    }
+
+    #[tool(
+        description = "Captures a screenshot of the Roblox Studio window and returns it as base64-encoded PNG data"
+    )]
+    async fn capture_screenshot(
+        &self,
+        Parameters(_args): Parameters<CaptureScreenshot>,
+    ) -> Result<CallToolResult, ErrorData> {
+        // Rust-only implementation - no plugin communication needed
+        match Self::take_studio_screenshot().await {
+            Ok(base64_data) => Ok(CallToolResult::success(vec![Content::text(base64_data)])),
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                "Failed to capture screenshot: {}",
+                e
+            ))])),
+        }
     }
 
     async fn generic_tool_run(
@@ -166,6 +242,138 @@ impl RBXStudioServer {
             Ok(result) => Ok(CallToolResult::success(vec![Content::text(result)])),
             Err(err) => Ok(CallToolResult::error(vec![Content::text(err.to_string())])),
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    async fn take_studio_screenshot() -> Result<String, Error> {
+        use std::process::Command;
+        use std::fs;
+        use std::io::Write;
+
+        // Create temp files
+        let temp_screenshot = std::env::temp_dir().join(format!("roblox_studio_{}.png", Uuid::new_v4()));
+        let temp_swift = std::env::temp_dir().join(format!("get_window_{}.swift", Uuid::new_v4()));
+
+        // Swift script to get window ID without requiring accessibility permissions
+        let swift_script = r#"
+import Cocoa
+import CoreGraphics
+
+let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+
+for window in windowList {
+    if let ownerName = window[kCGWindowOwnerName as String] as? String,
+       ownerName.contains("Roblox"),
+       let windowNumber = window[kCGWindowNumber as String] as? Int {
+        print(windowNumber)
+        exit(0)
+    }
+}
+exit(1)
+"#;
+
+        // Write Swift script to temp file
+        let mut swift_file = fs::File::create(&temp_swift)?;
+        swift_file.write_all(swift_script.as_bytes())?;
+        drop(swift_file);
+
+        // Get window ID for Roblox Studio using Swift
+        let window_id_output = Command::new("swift")
+            .arg(&temp_swift)
+            .output()?;
+
+        // Clean up Swift temp file
+        let _ = fs::remove_file(&temp_swift);
+
+        if !window_id_output.status.success() {
+            return Err(Error::msg("No Roblox Studio window found. Please open Roblox Studio."));
+        }
+
+        let window_id_str = String::from_utf8_lossy(&window_id_output.stdout);
+        let window_id = window_id_str.trim().parse::<i32>()
+            .map_err(|_| Error::msg("Failed to parse window ID"))?;
+
+        // Capture the window
+        let capture = Command::new("screencapture")
+            .arg("-l")
+            .arg(window_id.to_string())
+            .arg("-o") // Disable window shadow
+            .arg("-x") // No sound
+            .arg(&temp_screenshot)
+            .status()?;
+
+        if !capture.success() {
+            return Err(Error::msg("Failed to capture screenshot"));
+        }
+
+        // Read and encode the image
+        let image_data = fs::read(&temp_screenshot)?;
+
+        // Clean up screenshot temp file
+        let _ = fs::remove_file(&temp_screenshot);
+
+        // Encode to base64
+        Ok(base64::engine::general_purpose::STANDARD.encode(&image_data))
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn take_studio_screenshot() -> Result<String, Error> {
+        use std::process::Command;
+        use std::fs;
+
+        // Create temp file for screenshot
+        let temp_path = std::env::temp_dir().join(format!("roblox_studio_{}.png", Uuid::new_v4()));
+
+        // PowerShell script to capture Roblox Studio window
+        let ps_script = format!(
+            r#"
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+
+            $process = Get-Process | Where-Object {{ $_.MainWindowTitle -like "*Roblox Studio*" }} | Select-Object -First 1
+            if ($null -eq $process) {{
+                Write-Error "No Roblox Studio window found"
+                exit 1
+            }}
+
+            $handle = $process.MainWindowHandle
+            $rect = New-Object RECT
+            [Win32]::GetWindowRect($handle, [ref]$rect)
+
+            $width = $rect.Right - $rect.Left
+            $height = $rect.Bottom - $rect.Top
+
+            $bitmap = New-Object System.Drawing.Bitmap $width, $height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+
+            $bitmap.Save('{}', [System.Drawing.Imaging.ImageFormat]::Png)
+            "#,
+            temp_path.display()
+        );
+
+        let capture = Command::new("powershell")
+            .arg("-Command")
+            .arg(&ps_script)
+            .status()?;
+
+        if !capture.success() {
+            return Err(Error::msg("Failed to capture screenshot. Is Roblox Studio running?"));
+        }
+
+        // Read and encode the image
+        let image_data = fs::read(&temp_path)?;
+
+        // Clean up temp file
+        let _ = fs::remove_file(&temp_path);
+
+        // Encode to base64
+        Ok(base64::engine::general_purpose::STANDARD.encode(&image_data))
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    async fn take_studio_screenshot() -> Result<String, Error> {
+        Err(Error::msg("Screenshot capture is only supported on macOS and Windows"))
     }
 }
 
