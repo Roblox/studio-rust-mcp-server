@@ -17,15 +17,19 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Get Rust version
+        id: rust-version
+        run: echo "version=$(rustc --version | shasum -a 256 | cut -d' ' -f1)" >> $GITHUB_OUTPUT
       - name: Cache
-        if: ${{ github.ref_name != github.event.repository.default_branch }}
         uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin
+            ~/.rustup
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-rust-${{ steps.rust-version.outputs.version }}
       - name: Build
         run: |
           cargo install cargo-bundle cargo-edit
@@ -52,15 +56,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Get Rust version
+        id: rust-version
+        shell: bash
+        run: echo "version=$(rustc --version | shasum -a 256 | cut -d' ' -f1)" >> $GITHUB_OUTPUT
       - name: Cache
-        if: ${{ github.ref_name != github.event.repository.default_branch }}
         uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin
+            ~/.rustup
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-rust-${{ steps.rust-version.outputs.version }}
       - name: Build
         run: |
           cargo install cargo-edit

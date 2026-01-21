@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
         return install::install().await;
     }
 
-    tracing::debug!("MCP tracing enabled");
+    tracing::debug!("Debug MCP tracing enabled");
 
     let server_state = Arc::new(Mutex::new(AppState::new()));
 
