@@ -58,8 +58,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Get Rust version
         id: rust-version
-        shell: bash
-        run: echo "version=$(rustc --version | shasum -a 256 | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+        shell: pwsh
+        run: |
+          $version = (rustc --version | Out-String).Trim()
+          $hash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($version))) -Algorithm SHA256).Hash.ToLower()
+          echo "version=$hash" >> $env:GITHUB_OUTPUT
       - name: Cache
         uses: actions/cache@v3
         with:
