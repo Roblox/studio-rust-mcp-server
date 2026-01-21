@@ -93,7 +93,7 @@ pub fn install_to_config<'a>(
         mcp_servers.remove("Roblox Studio");
     }
 
-    config["mcpServers"]["RobloxStudio"] = json!({
+    config["mcpServers"]["Roblox_Studio"] = json!({
       "command": &exe_path,
       "args": [
         "--stdio"
