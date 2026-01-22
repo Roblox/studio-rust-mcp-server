@@ -65,13 +65,10 @@ fn get_exe_path() -> io::Result<PathBuf> {
     env::current_exe()
 }
 
-pub fn suggest_to_config_claude_code<'a>(
-    exe_path: &Path,
-) -> Result<String> {
-
+pub fn suggest_to_config_claude_code<'a>(exe_path: &Path) -> Result<String> {
     let home_dir = env::var_os("HOME")
-            .or_else(|| env::var_os("USERPROFILE"))
-            .unwrap();
+        .or_else(|| env::var_os("USERPROFILE"))
+        .unwrap();
     let config_path = Path::new(&home_dir).join(".claude.json");
 
     if config_path.exists() {
