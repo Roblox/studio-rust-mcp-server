@@ -65,11 +65,27 @@ fn get_exe_path() -> io::Result<PathBuf> {
     env::current_exe()
 }
 
+pub fn suggest_to_config_claude_code<'a>(
+    exe_path: &Path,
+) -> Result<String> {
+
+    let home_dir = env::var_os("HOME")
+            .or_else(|| env::var_os("USERPROFILE"))
+            .unwrap();
+    let config_path = Path::new(&home_dir).join(".claude.json");
+
+    if config_path.exists() {
+        Ok(format!("To add the MCP to Claude Code CLI run:\nclaude mcp add --transport stdio Roblox_Studio -- '{}' --stdio", exe_path.display()))
+    } else {
+        Err(eyre!("No config file found"))
+    }
+}
+
 pub fn install_to_config<'a>(
     config_path: Result<PathBuf>,
     exe_path: &Path,
-    name: &'a str,
-) -> Result<&'a str> {
+    name: &str,
+) -> Result<String> {
     let config_path = config_path?;
     let mut config: serde_json::Map<String, Value> = {
         if !config_path.exists() {
@@ -106,7 +122,7 @@ pub fn install_to_config<'a>(
 
     println!("Installed MCP Studio plugin to {name} config {config_path:?}");
 
-    Ok(name)
+    Ok(name.to_string())
 }
 
 async fn install_internal() -> Result<String> {
@@ -139,6 +155,7 @@ async fn install_internal() -> Result<String> {
     let results = vec![
         install_to_config(get_claude_config(), &this_exe, "Claude"),
         install_to_config(get_cursor_config(), &this_exe, "Cursor"),
+        suggest_to_config_claude_code(&this_exe),
     ];
 
     let successes: Vec<_> = results
