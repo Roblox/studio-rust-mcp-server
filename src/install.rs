@@ -65,7 +65,7 @@ fn get_exe_path() -> io::Result<PathBuf> {
     env::current_exe()
 }
 
-pub fn suggest_to_config_claude_code<'a>(exe_path: &Path) -> Result<String> {
+pub fn suggest_to_config_claude_code(exe_path: &Path) -> Result<String> {
     let home_dir = env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))
         .unwrap();
@@ -78,7 +78,7 @@ pub fn suggest_to_config_claude_code<'a>(exe_path: &Path) -> Result<String> {
     }
 }
 
-pub fn install_to_config<'a>(
+pub fn install_to_config(
     config_path: Result<PathBuf>,
     exe_path: &Path,
     name: &str,
