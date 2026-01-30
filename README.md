@@ -104,3 +104,31 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### simulate_input
+Simulates keyboard or mouse input during playtest. Auto-installs required scripts on first use.
+
+**Parameters:**
+- `input_type`: `"keyboard"` or `"mouse"`
+- `key`: Key name (e.g., `"W"`, `"Space"`, `"E"`) or mouse button (`"Left"`, `"Right"`)
+- `action`: `"begin"` (key down), `"end"` (key up), or `"tap"` (press and release)
+
+**Example prompt:** "Press W to move forward"
+
+### click_gui
+Simulates clicking a GUI element during playtest by path.
+
+**Parameters:**
+- `path`: Path to GUI element (e.g., `"PlayerGui.MainUI.PlayButton"`)
+
+**Example prompt:** "Click the start button"
+
+> **Note:** Input simulation requires playtest mode (F5) and HttpService enabled. Scripts are auto-installed on first use but require a playtest restart to take effect.
