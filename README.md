@@ -93,7 +93,7 @@ To make sure everything is set up correctly, follow these steps:
    which you can also verify in the console output.
 1. Verify that Claude Desktop is correctly configured by clicking on the hammer icon for MCP tools
    beneath the text field where you enter prompts. This should open a window with the list of
-   available Roblox Studio tools (`insert_model` and `run_code`).
+   available Roblox Studio tools (`run_code`, `insert_model`, `search_assets`, `preview_asset`).
 
 **Note**: You can fix common issues with setup by restarting Studio and Claude Desktop. Claude
 sometimes is hidden in the system tray, so ensure you've exited it completely.
@@ -104,3 +104,37 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts the first matching model into the workspace.
+
+### search_assets
+Searches the Roblox marketplace and returns assets ranked by quality score.
+
+**Parameters:**
+- `query`: Search query (e.g., "medieval castle", "sci-fi weapon")
+- `max_results`: Maximum results to return (default: 10, max: 20)
+
+**Returns:** Assets ranked by quality score with favorites count, creator verification status (✓), and score. Quality scoring considers:
+- **Favorites** (logarithmic scale with diminishing returns)
+- **Verified Creator** (+20 points)
+- **Recency** (up to +15 points for recently updated assets)
+- **Description Quality** (up to +10 points)
+
+**Example prompt:** "Search for tree assets and show me the options"
+
+### preview_asset
+Previews an asset by inserting it into the workspace. Allows you to see what an asset looks like before committing to it.
+
+**Parameters:**
+- `asset_id`: The asset ID (from search_assets results)
+- `keep`: If true, keeps the asset; if false/omitted, removes on next preview
+
+**Returns:** Asset metadata including type, size, and contents. Use `capture_screenshot` (if available) to see it visually.
+
+**Example prompt:** "Preview asset 123456789 so I can see what it looks like"

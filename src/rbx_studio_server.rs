@@ -17,6 +17,7 @@ use tokio::sync::oneshot::Receiver;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::Duration;
 use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 pub const STUDIO_PLUGIN_PORT: u16 = 44755;
 const LONG_POLL_DURATION: Duration = Duration::from_secs(15);
@@ -107,9 +108,94 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct SearchAssets {
+    #[schemars(description = "Search query for finding assets (e.g., 'medieval castle', 'sci-fi weapon', 'tree')")]
+    query: String,
+    #[schemars(description = "Maximum number of results to return (default: 10, max: 20)")]
+    max_results: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct PreviewAsset {
+    #[schemars(description = "Asset ID to preview (from search_assets results)")]
+    asset_id: u64,
+    #[schemars(description = "Whether to keep the asset in workspace after preview (default: false - removes after screenshot)")]
+    keep: Option<bool>,
+}
+
+// ============ Asset Search Enrichment Types ============
+
+/// Response from the Luau plugin's SearchAssets
+#[derive(Debug, Deserialize)]
+struct PluginSearchResponse {
+    success: bool,
+    error: Option<String>,
+    assets: Vec<PluginAssetResult>,
+    query: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginAssetResult {
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    asset_id: u64,
+    name: String,
+    creator: String,
+}
+
+/// Deserialize a number that may come as a string (Luau JSONEncode quirk)
+fn deserialize_number_from_string<'de, D>(deserializer: D) -> std::result::Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumber {
+        String(String),
+        Number(u64),
+    }
+
+    match StringOrNumber::deserialize(deserializer)? {
+        StringOrNumber::String(s) => s.parse().map_err(D::Error::custom),
+        StringOrNumber::Number(n) => Ok(n),
+    }
+}
+
+/// Response from economy.roblox.com/v2/assets/{id}/details
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct EconomyAssetDetails {
+    description: Option<String>,
+    creator: Option<EconomyCreator>,
+    updated: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct EconomyCreator {
+    has_verified_badge: Option<bool>,
+}
+
+/// Enriched asset with all metadata and quality score
+#[derive(Debug, Serialize)]
+struct EnrichedAsset {
+    asset_id: u64,
+    name: String,
+    creator: String,
+    creator_verified: bool,
+    description: Option<String>,
+    favorites: u64,
+    quality_score: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    SearchAssets(SearchAssets),
+    PreviewAsset(PreviewAsset),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -140,6 +226,243 @@ impl RBXStudioServer {
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
             .await
+    }
+
+    #[tool(
+        description = "Searches the Roblox marketplace for assets matching a query. Returns a ranked list of assets with quality scores based on favorites, creator verification, and recency. Assets are sorted by quality score to help you choose the best option."
+    )]
+    async fn search_assets(
+        &self,
+        Parameters(args): Parameters<SearchAssets>,
+    ) -> Result<CallToolResult, ErrorData> {
+        // Step 1: Get basic search results from plugin
+        let plugin_result = self
+            .run_tool_raw(ToolArgumentValues::SearchAssets(args.clone()))
+            .await
+            .map_err(|e| ErrorData::internal_error(format!("Plugin search failed: {}", e), None))?;
+
+        // Step 2: Parse the JSON response from plugin
+        let plugin_response: PluginSearchResponse = serde_json::from_str(&plugin_result)
+            .map_err(|e| {
+                ErrorData::internal_error(format!("Failed to parse plugin response: {}", e), None)
+            })?;
+
+        if !plugin_response.success {
+            return Ok(CallToolResult::error(vec![Content::text(
+                plugin_response
+                    .error
+                    .unwrap_or_else(|| "Unknown search error".to_string()),
+            )]));
+        }
+
+        if plugin_response.assets.is_empty() {
+            return Ok(CallToolResult::success(vec![Content::text(format!(
+                "No assets found for query: '{}'",
+                plugin_response.query
+            ))]));
+        }
+
+        // Step 3: Enrich assets with web API data
+        let enriched = self.enrich_assets(plugin_response.assets).await;
+
+        // Step 4: Format results
+        let mut lines = vec![
+            format!(
+                "Found {} assets for '{}', ranked by quality:\n",
+                enriched.len(),
+                plugin_response.query
+            ),
+        ];
+
+        for (i, asset) in enriched.iter().enumerate() {
+            let verified = if asset.creator_verified { " ✓" } else { "" };
+            let desc_preview = asset
+                .description
+                .as_ref()
+                .map(|d| {
+                    let clean = d.lines().next().unwrap_or("").trim();
+                    if clean.len() > 60 {
+                        format!("{}...", &clean[..57])
+                    } else {
+                        clean.to_string()
+                    }
+                })
+                .unwrap_or_default();
+
+            lines.push(format!(
+                "{}. **{}** (ID: {})\n   Creator: {}{} | ⭐ {} favorites | Score: {:.1}\n   {}",
+                i + 1,
+                asset.name,
+                asset.asset_id,
+                asset.creator,
+                verified,
+                asset.favorites,
+                asset.quality_score,
+                desc_preview
+            ));
+        }
+
+        lines.push(String::new());
+        lines.push("Use `preview_asset` with an asset_id to see what it looks like.".to_string());
+
+        Ok(CallToolResult::success(vec![Content::text(lines.join("\n"))]))
+    }
+
+    /// Enrich assets with metadata from Roblox web APIs
+    async fn enrich_assets(&self, assets: Vec<PluginAssetResult>) -> Vec<EnrichedAsset> {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap_or_default();
+
+        // Fetch metadata for each asset concurrently
+        let futures: Vec<_> = assets
+            .into_iter()
+            .map(|asset| {
+                let client = client.clone();
+                async move {
+                    let (economy_data, favorites) = tokio::join!(
+                        Self::fetch_economy_details(&client, asset.asset_id),
+                        Self::fetch_favorites_count(&client, asset.asset_id)
+                    );
+
+                    let (description, creator_verified, updated) = match economy_data {
+                        Ok(details) => (
+                            details.description,
+                            details
+                                .creator
+                                .as_ref()
+                                .and_then(|c| c.has_verified_badge)
+                                .unwrap_or(false),
+                            details.updated,
+                        ),
+                        Err(_) => (None, false, None),
+                    };
+
+                    let favorites = favorites.unwrap_or(0);
+                    let quality_score =
+                        Self::calculate_quality_score(favorites, creator_verified, &updated, &description);
+
+                    EnrichedAsset {
+                        asset_id: asset.asset_id,
+                        name: asset.name,
+                        creator: asset.creator,
+                        creator_verified,
+                        description,
+                        favorites,
+                        quality_score,
+                    }
+                }
+            })
+            .collect();
+
+        let mut enriched: Vec<EnrichedAsset> = futures::future::join_all(futures).await;
+
+        // Sort by quality score (highest first)
+        enriched.sort_by(|a, b| {
+            b.quality_score
+                .partial_cmp(&a.quality_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        enriched
+    }
+
+    /// Fetch asset details from economy.roblox.com
+    async fn fetch_economy_details(
+        client: &reqwest::Client,
+        asset_id: u64,
+    ) -> std::result::Result<EconomyAssetDetails, reqwest::Error> {
+        let url = format!("https://economy.roblox.com/v2/assets/{}/details", asset_id);
+        client.get(&url).send().await?.json().await
+    }
+
+    /// Fetch favorites count from catalog.roblox.com
+    async fn fetch_favorites_count(
+        client: &reqwest::Client,
+        asset_id: u64,
+    ) -> std::result::Result<u64, reqwest::Error> {
+        let url = format!(
+            "https://catalog.roblox.com/v1/favorites/assets/{}/count",
+            asset_id
+        );
+        client.get(&url).send().await?.json().await
+    }
+
+    /// Calculate quality score based on various factors
+    fn calculate_quality_score(
+        favorites: u64,
+        creator_verified: bool,
+        updated: &Option<String>,
+        description: &Option<String>,
+    ) -> f64 {
+        let mut score = 0.0;
+
+        // Favorites: logarithmic scale (diminishing returns)
+        // 100 favorites = ~46 points, 1000 = ~69, 10000 = ~92
+        if favorites > 0 {
+            score += (favorites as f64).ln() * 10.0;
+        }
+
+        // Creator verified badge: +20 points
+        if creator_verified {
+            score += 20.0;
+        }
+
+        // Recency bonus: up to 15 points for recently updated assets
+        if let Some(updated_str) = updated {
+            if let Ok(updated_date) = DateTime::parse_from_rfc3339(updated_str) {
+                let now = Utc::now();
+                let days_ago = (now - updated_date.with_timezone(&Utc)).num_days();
+                // Full 15 points if updated within 30 days, decreasing over 2 years
+                let recency_score = 15.0 * (1.0 - (days_ago as f64 / 730.0).min(1.0));
+                score += recency_score.max(0.0);
+            }
+        }
+
+        // Description quality: up to 10 points
+        if let Some(desc) = description {
+            let desc_len = desc.len();
+            if desc_len > 10 {
+                score += 5.0 + (desc_len as f64 / 200.0).min(1.0) * 5.0;
+            }
+        }
+
+        score
+    }
+
+    #[tool(
+        description = "Previews an asset by temporarily inserting it and taking a screenshot. Use this to see what an asset looks like before committing to it. Set keep=true to keep the asset in workspace, or leave as default to remove after screenshot."
+    )]
+    async fn preview_asset(
+        &self,
+        Parameters(args): Parameters<PreviewAsset>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::PreviewAsset(args))
+            .await
+    }
+
+    /// Run a tool and return the raw string result (for internal processing)
+    async fn run_tool_raw(&self, args: ToolArgumentValues) -> std::result::Result<String, String> {
+        let (command, id) = ToolArguments::new(args);
+        tracing::debug!("Running command (raw): {:?}", command);
+        let (tx, mut rx) = mpsc::unbounded_channel::<Result<String>>();
+        let trigger = {
+            let mut state = self.state.lock().await;
+            state.process_queue.push_back(command);
+            state.output_map.insert(id, tx);
+            state.trigger.clone()
+        };
+        trigger.send(()).map_err(|e| format!("Unable to trigger send: {e}"))?;
+        let result = rx
+            .recv()
+            .await
+            .ok_or_else(|| "Couldn't receive response".to_string())?;
+        {
+            let mut state = self.state.lock().await;
+            state.output_map.remove_entry(&id);
+        }
+        result.map_err(|e| e.to_string())
     }
 
     async fn generic_tool_run(
