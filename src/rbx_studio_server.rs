@@ -100,6 +100,7 @@ struct RunCode {
     #[schemars(description = "Code to run")]
     command: String,
 }
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 struct InsertModel {
     #[schemars(description = "Query to search for the model")]
@@ -107,9 +108,16 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct ValidateUI {
+    #[schemars(description = "Optional path to ScreenGui to validate (e.g., 'StarterGui.MainUI'). If not specified, validates all ScreenGuis.")]
+    path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    ValidateUI(ValidateUI),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -139,6 +147,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Validates UI elements for common layout issues. Checks for: overlapping elements, offscreen elements, pixel positioning (Offset without Scale), missing UISizeConstraint, and AnchorPoint/Position mismatches. Returns a JSON report of issues found."
+    )]
+    async fn validate_ui(
+        &self,
+        Parameters(args): Parameters<ValidateUI>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::ValidateUI(args))
             .await
     }
 

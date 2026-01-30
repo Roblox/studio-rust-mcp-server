@@ -104,3 +104,26 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### validate_ui
+Validates UI elements for common layout issues. Returns a JSON report of problems found.
+
+**Parameters:**
+- `path`: Optional path to ScreenGui (e.g., `"StarterGui.MainUI"`). If not specified, validates all ScreenGuis.
+
+**Checks for:**
+- **Overlapping elements** - GUI elements that visually overlap
+- **Offscreen elements** - Elements extending beyond viewport boundaries
+- **Pixel positioning** - Using Offset without Scale (not responsive)
+- **Missing constraints** - Containers without UISizeConstraint
+- **Anchor mismatches** - AnchorPoint doesn't match Position alignment
+
+**Example prompt:** "Validate my UI for layout issues"
