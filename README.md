@@ -104,3 +104,20 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### capture_screenshot
+Captures a screenshot of the Roblox Studio window and returns it as a JPEG image. Useful for visual debugging, verifying UI changes, or analyzing the workspace layout.
+
+**Platform Support:**
+- **macOS**: Requires Screen Recording permission for Terminal/IDE
+- **Windows**: No additional permissions required
+
+**Example prompt:** "Take a screenshot and tell me what you see in the workspace"

@@ -2,6 +2,7 @@ use crate::error::Result;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{extract::State, Json};
+use base64::Engine;
 use color_eyre::eyre::{Error, OptionExt};
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -20,6 +21,11 @@ use uuid::Uuid;
 
 pub const STUDIO_PLUGIN_PORT: u16 = 44755;
 const LONG_POLL_DURATION: Duration = Duration::from_secs(15);
+
+// Screenshot configuration
+const SCREENSHOT_MAX_DIMENSION: u32 = 1920;
+const SCREENSHOT_JPEG_QUALITY: u8 = 85;
+const SCREENSHOT_TIMEOUT_SECS: u64 = 10;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ToolArguments {
@@ -107,6 +113,11 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct CaptureScreenshot {
+    // No parameters - captures the Roblox Studio window
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
@@ -142,6 +153,26 @@ impl RBXStudioServer {
             .await
     }
 
+    #[tool(
+        description = "Captures a screenshot of the Roblox Studio window and returns it as a JPEG image. Useful for visual debugging, verifying UI changes, or analyzing the workspace layout."
+    )]
+    async fn capture_screenshot(
+        &self,
+        Parameters(_args): Parameters<CaptureScreenshot>,
+    ) -> Result<CallToolResult, ErrorData> {
+        // Rust-only implementation - no plugin communication needed
+        match Self::take_studio_screenshot().await {
+            Ok(base64_data) => Ok(CallToolResult::success(vec![Content::image(
+                base64_data,
+                "image/jpeg",
+            )])),
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
+                "Failed to capture screenshot: {}",
+                e
+            ))])),
+        }
+    }
+
     async fn generic_tool_run(
         &self,
         args: ToolArgumentValues,
@@ -171,6 +202,189 @@ impl RBXStudioServer {
             Ok(result) => Ok(CallToolResult::success(vec![Content::text(result)])),
             Err(err) => Ok(CallToolResult::error(vec![Content::text(err.to_string())])),
         }
+    }
+
+    /// Process an image: resize to fit within max dimensions and encode as JPEG base64
+    fn process_screenshot(img: image::DynamicImage) -> Result<String, Error> {
+        let resized = img.resize(
+            SCREENSHOT_MAX_DIMENSION,
+            SCREENSHOT_MAX_DIMENSION,
+            image::imageops::FilterType::Lanczos3,
+        );
+
+        let mut buffer = Vec::new();
+        let rgb_image = resized.to_rgb8();
+        let encoder =
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, SCREENSHOT_JPEG_QUALITY);
+        rgb_image.write_with_encoder(encoder)?;
+
+        Ok(base64::engine::general_purpose::STANDARD.encode(&buffer))
+    }
+
+    #[cfg(target_os = "macos")]
+    async fn take_studio_screenshot() -> Result<String, Error> {
+        use std::fs;
+        use std::io::Write;
+        use tokio::process::Command;
+
+        let temp_screenshot =
+            std::env::temp_dir().join(format!("roblox_studio_{}.png", Uuid::new_v4()));
+        let temp_swift =
+            std::env::temp_dir().join(format!("get_window_{}.swift", Uuid::new_v4()));
+
+        let swift_script = r#"
+import Cocoa
+import CoreGraphics
+
+let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+
+for window in windowList {
+    if let ownerName = window[kCGWindowOwnerName as String] as? String,
+       ownerName.contains("Roblox"),
+       let windowName = window[kCGWindowName as String] as? String,
+       windowName.contains("Roblox Studio"),
+       let windowNumber = window[kCGWindowNumber as String] as? Int {
+        print(windowNumber)
+        exit(0)
+    }
+}
+exit(1)
+"#;
+
+        let mut swift_file = fs::File::create(&temp_swift)?;
+        swift_file.write_all(swift_script.as_bytes())?;
+        drop(swift_file);
+
+        let window_id_result = tokio::time::timeout(
+            Duration::from_secs(SCREENSHOT_TIMEOUT_SECS),
+            Command::new("swift").arg(&temp_swift).output(),
+        )
+        .await
+        .map_err(|_| Error::msg("Timed out while finding Roblox Studio window"))?;
+
+        let window_id_output = window_id_result?;
+        let _ = fs::remove_file(&temp_swift);
+
+        if !window_id_output.status.success() {
+            return Err(Error::msg(
+                "Roblox Studio window not found. Please ensure Roblox Studio is open.",
+            ));
+        }
+
+        let window_id_str = String::from_utf8_lossy(&window_id_output.stdout);
+        let window_id = window_id_str
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| Error::msg("Failed to parse window ID"))?;
+
+        let capture_result = tokio::time::timeout(
+            Duration::from_secs(SCREENSHOT_TIMEOUT_SECS),
+            Command::new("screencapture")
+                .arg("-l")
+                .arg(window_id.to_string())
+                .arg("-o")
+                .arg("-x")
+                .arg(&temp_screenshot)
+                .status(),
+        )
+        .await
+        .map_err(|_| Error::msg("Timed out while capturing screenshot"))?;
+
+        let capture = capture_result?;
+
+        if !capture.success() {
+            return Err(Error::msg(
+                "Failed to capture screenshot. On macOS, ensure Screen Recording permission is granted in System Settings > Privacy & Security > Screen Recording.",
+            ));
+        }
+
+        let img = image::open(&temp_screenshot)?;
+        let _ = fs::remove_file(&temp_screenshot);
+
+        Self::process_screenshot(img)
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn take_studio_screenshot() -> Result<String, Error> {
+        use std::fs;
+        use tokio::process::Command;
+
+        let temp_path =
+            std::env::temp_dir().join(format!("roblox_studio_{}.png", Uuid::new_v4()));
+
+        let ps_script = format!(
+            r#"
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public struct RECT {{
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+}}
+
+public class Win32 {{
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+}}
+"@
+
+$process = Get-Process | Where-Object {{ $_.MainWindowTitle -like "*Roblox Studio*" }} | Select-Object -First 1
+if ($null -eq $process) {{
+    Write-Error "No Roblox Studio window found"
+    exit 1
+}}
+
+$handle = $process.MainWindowHandle
+$rect = New-Object RECT
+[Win32]::GetWindowRect($handle, [ref]$rect) | Out-Null
+
+$width = $rect.Right - $rect.Left
+$height = $rect.Bottom - $rect.Top
+
+$bitmap = New-Object System.Drawing.Bitmap $width, $height
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+$graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+
+$bitmap.Save('{}', [System.Drawing.Imaging.ImageFormat]::Png)
+"#,
+            temp_path.display()
+        );
+
+        let capture_result = tokio::time::timeout(
+            Duration::from_secs(SCREENSHOT_TIMEOUT_SECS),
+            Command::new("powershell")
+                .arg("-Command")
+                .arg(&ps_script)
+                .status(),
+        )
+        .await
+        .map_err(|_| Error::msg("Timed out while capturing screenshot"))?;
+
+        let capture = capture_result?;
+
+        if !capture.success() {
+            return Err(Error::msg(
+                "Failed to capture screenshot. Is Roblox Studio running?",
+            ));
+        }
+
+        let img = image::open(&temp_path)?;
+        let _ = fs::remove_file(&temp_path);
+
+        Self::process_screenshot(img)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    async fn take_studio_screenshot() -> Result<String, Error> {
+        Err(Error::msg(
+            "Screenshot capture is only supported on macOS and Windows",
+        ))
     }
 }
 
