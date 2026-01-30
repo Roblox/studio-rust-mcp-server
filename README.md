@@ -104,3 +104,26 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### create_responsive_layout
+Creates a ScreenGui with best-practice responsive container structure.
+
+**Parameters:**
+- `name`: Name for the ScreenGui (e.g., `"MainUI"`)
+- `containers`: Array of positions: `"TopLeft"`, `"TopRight"`, `"TopCenter"`, `"BottomLeft"`, `"BottomRight"`, `"BottomCenter"`, `"CenterLeft"`, `"CenterRight"`, `"Center"`
+
+**Each container includes:**
+- Correct `AnchorPoint` and `Position` for its location
+- `UISizeConstraint` (Min 100x50, Max 400x600)
+- `UIListLayout` for automatic child arrangement
+- `UIPadding` for internal spacing
+
+**Example prompt:** "Create a responsive UI with containers in the top-left and bottom-center"

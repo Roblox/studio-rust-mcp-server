@@ -100,6 +100,7 @@ struct RunCode {
     #[schemars(description = "Code to run")]
     command: String,
 }
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 struct InsertModel {
     #[schemars(description = "Query to search for the model")]
@@ -107,9 +108,18 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct CreateResponsiveLayout {
+    #[schemars(description = "Name for the ScreenGui (e.g., 'MainUI')")]
+    name: String,
+    #[schemars(description = "Array of container positions to create: 'TopLeft', 'TopRight', 'TopCenter', 'BottomLeft', 'BottomRight', 'BottomCenter', 'CenterLeft', 'CenterRight', 'Center'")]
+    containers: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    CreateResponsiveLayout(CreateResponsiveLayout),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -139,6 +149,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Creates a responsive UI layout with best-practice container structure. Creates a ScreenGui with positioned containers that include UISizeConstraint and UIListLayout for proper responsive behavior."
+    )]
+    async fn create_responsive_layout(
+        &self,
+        Parameters(args): Parameters<CreateResponsiveLayout>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::CreateResponsiveLayout(args))
             .await
     }
 

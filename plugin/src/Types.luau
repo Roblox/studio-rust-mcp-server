@@ -6,7 +6,12 @@ export type RunCodeArgs = {
 	command: string,
 }
 
-export type ToolArgs = { InsertModel: InsertModelArgs } | { RunCode: RunCodeArgs }
+export type CreateResponsiveLayoutArgs = {
+	name: string,
+	containers: {string},
+}
+
+export type ToolArgs = { InsertModel: InsertModelArgs } | { RunCode: RunCodeArgs } | { CreateResponsiveLayout: CreateResponsiveLayoutArgs }
 
 export type ToolFunction = (ToolArgs) -> string?
 
