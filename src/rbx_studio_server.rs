@@ -107,9 +107,28 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct ReadOutput {
+    #[schemars(
+        description = "Filter output by level: 'all' (default), 'print', 'warn', or 'error'. Use 'error' to quickly find issues."
+    )]
+    filter: Option<String>,
+
+    #[schemars(
+        description = "Maximum number of lines to return (default: 1000, max: 10000). Returns most recent messages first."
+    )]
+    max_lines: Option<u32>,
+
+    #[schemars(
+        description = "Clear buffer after reading (default: true). Set to false to preserve history for subsequent reads."
+    )]
+    clear_after_read: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    ReadOutput(ReadOutput),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -139,6 +158,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Reads captured output from Roblox Studio's Output window. Captures print(), warn(), and error() messages during both Edit and Play modes. Useful for debugging scripts by checking for errors or reviewing print statements. The buffer holds up to 10,000 messages with FIFO eviction. Will warn if messages were dropped due to buffer overflow."
+    )]
+    async fn read_output(
+        &self,
+        Parameters(args): Parameters<ReadOutput>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::ReadOutput(args))
             .await
     }
 

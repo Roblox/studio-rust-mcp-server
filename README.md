@@ -104,3 +104,21 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### read_output
+Reads captured output from Roblox Studio's Output window. Captures `print()`, `warn()`, and `error()` messages during both Edit and Play modes.
+
+**Parameters:**
+- `filter`: Filter by level - `"all"` (default), `"print"`, `"warn"`, or `"error"`
+- `max_lines`: Maximum lines to return (default: 1000, max: 10000)
+- `clear_after_read`: Clear buffer after reading (default: true)
+
+**Example prompt:** "Check the output for any errors"

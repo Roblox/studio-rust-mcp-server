@@ -1,6 +1,7 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
 local MockWebSocketService = require(Main.MockWebSocketService)
 local Types = require(Main.Types)
+local OutputCapture = require(Main.OutputCapture)
 
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local HttpService = game:GetService("HttpService")
@@ -14,6 +15,9 @@ local SEND_ENDPOINT = "/response"
 if RunService:IsRunning() then
 	return
 end
+
+-- Initialize output capture early to catch all messages
+OutputCapture.initialize()
 
 local old_warn = warn
 local function log(...)

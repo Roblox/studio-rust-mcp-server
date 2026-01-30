@@ -1,0 +1,1580 @@
+<roblox version="4">
+  <Item class="Folder" referent="0">
+    <Properties>
+      <string name="Name">MCPStudioPlugin</string>
+    </Properties>
+    <Item class="Script" referent="1">
+      <Properties>
+        <string name="Name">Main</string>
+        <token name="RunContext">0</token>
+        <string name="Source"><![CDATA[local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local MockWebSocketService = require(Main.MockWebSocketService)
+local Types = require(Main.Types)
+local OutputCapture = require(Main.OutputCapture)
+
+local ChangeHistoryService = game:GetService("ChangeHistoryService")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local StudioService = game:GetService("StudioService")
+
+local URI = "http://localhost:44755"
+local RECEIVE_ENDPOINT = "/request"
+local SEND_ENDPOINT = "/response"
+
+if RunService:IsRunning() then
+	return
+end
+
+local old_warn = warn
+local function log(...)
+	if false then
+		old_warn(...)
+	end
+end
+
+local function fetchBuiltinTools()
+	local tools = {}
+	for _, tool in Main.Tools:GetChildren() do
+		if tool:IsA("ModuleScript") then
+			table.insert(tools, require(tool) :: Types.ToolFunction)
+		end
+	end
+	return tools
+end
+
+local tools = fetchBuiltinTools()
+
+-- Initialize output capture (persistent connection to LogService)
+-- This captures all output messages from this point forward
+OutputCapture.initialize()
+
+local function connectWebSocket()
+	local client = MockWebSocketService:CreateClient(URI)
+	client:SetReceiveEndpoint(RECEIVE_ENDPOINT)
+	client:SetSendEndpoint(SEND_ENDPOINT)
+
+	client.Opened:Once(function()
+		log("[MCP] Connection opened")
+	end)
+
+	client.Closed:Once(function()
+		log("[MCP] Connection closed")
+	end)
+
+	client.MessageReceived:Connect(function(message)
+		log("[MCP] Message received")
+
+		local body = HttpService:JSONDecode(message)
+		assert(body and body.id and body.args, "Invalid message received")
+
+		local id: string = body.id
+		local responseSent = false
+		local function sendResponseOnce(response: string)
+			if not responseSent then
+				log("[MCP] Sending response:" .. response)
+				responseSent = true
+				client:Send({
+					id = id,
+					response = response,
+				})
+			end
+		end
+
+		local args: Types.ToolArgs = body.args
+		local recording = ChangeHistoryService:TryBeginRecording("StudioMCP")
+
+		for _, tool in tools do
+			local success, response = pcall(tool, args)
+
+			if success and response then
+				sendResponseOnce(response)
+			elseif not success then
+				sendResponseOnce("Error handling request: " .. tostring(response))
+			end
+		end
+
+		if recording then
+			ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit)
+		end
+
+		sendResponseOnce("No tool found to handle request")
+		log("[MCP] Successfully handled request")
+	end)
+
+	return client
+end
+
+local function getButtonImage()
+	local ok, response = pcall(function()
+		return StudioService:GetClassIcon("PackageLink").Image
+	end)
+	return ok and response or "rbxasset://textures/ui/GuiImagePlaceholder.png"
+end
+
+local currentClient: MockWebSocketService.MockWebSocketClient? = connectWebSocket() -- nil for default off
+print("The MCP Studio plugin is ready for prompts.")
+
+local toolbar = plugin:CreateToolbar("MCP")
+local toggleButton = toolbar:CreateButton("Toggle MCP", "Toggle connection to the server", getButtonImage())
+toggleButton.ClickableWhenViewportHidden = true
+toggleButton:SetActive(currentClient ~= nil)
+
+toggleButton.Click:Connect(function()
+	if not currentClient then
+		currentClient = connectWebSocket()
+		print("The MCP Studio plugin is ready for prompts.")
+	else
+		currentClient:Close()
+		currentClient = nil
+		print("The MCP Studio plugin is stopped.")
+	end
+end)
+
+-- Clean up resources when plugin unloads to prevent memory leaks
+plugin.Unloading:Connect(function()
+	if currentClient then
+		currentClient:Close()
+		currentClient = nil
+	end
+	OutputCapture.shutdown()
+end)
+]]></string>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="2">
+      <Properties>
+        <string name="Name">MockWebSocketService</string>
+        <string name="Source"><![CDATA[local HttpService = game:GetService("HttpService")
+
+local MockWebSocketClient = {}
+MockWebSocketClient.__index = MockWebSocketClient
+
+local EnumWebSocketState = {
+	Connecting = "Connecting",
+	Open = "Open",
+	Closing = "Closing",
+	Closed = "Closed",
+}
+
+local CloseableStates = {
+	[EnumWebSocketState.Connecting] = true,
+	[EnumWebSocketState.Open] = true,
+}
+
+local POLL_WAIT_TIME = 1
+
+export type MockWebSocketClient = {
+	Send: (self: MockWebSocketClient, data: any) -> (),
+	Close: (self: MockWebSocketClient) -> (),
+	SetReceiveEndpoint: (self: MockWebSocketClient, endpoint: string) -> (),
+	SetSendEndpoint: (self: MockWebSocketClient, endpoint: string) -> (),
+	Opened: RBXScriptSignal,
+	Closed: RBXScriptSignal,
+	MessageReceived: RBXScriptSignal,
+	ConnectionState: typeof(EnumWebSocketState.Connecting),
+}
+
+type MockWebSocketClientPrivate = MockWebSocketClient & {
+	new: (uri: string) -> MockWebSocketClient,
+	_OpenImpl: (self: MockWebSocketClient) -> (),
+	_uri: string,
+	_receiveEndpoint: string,
+	_sendEndpoint: string,
+	_pollTask: thread?,
+	_OpenedEvent: BindableEvent,
+	_ClosedEvent: BindableEvent,
+	_MessageReceivedEvent: BindableEvent,
+}
+
+function MockWebSocketClient.new(uri: string): MockWebSocketClient
+	local self: MockWebSocketClientPrivate = setmetatable({}, MockWebSocketClient) :: any
+
+	self._uri = uri
+	self._receiveEndpoint = ""
+	self._sendEndpoint = ""
+	self._pollTask = nil :: thread?
+
+	self._OpenedEvent = Instance.new("BindableEvent")
+	self.Opened = self._OpenedEvent.Event
+
+	self._ClosedEvent = Instance.new("BindableEvent")
+	self.Closed = self._ClosedEvent.Event
+
+	self._MessageReceivedEvent = Instance.new("BindableEvent")
+	self.MessageReceived = self._MessageReceivedEvent.Event
+
+	self.ConnectionState = EnumWebSocketState.Connecting
+
+	task.defer(self._OpenImpl, self)
+
+	return self
+end
+
+local function doRequest(url: string, method: "GET" | "POST", body: any)
+	local ok, response = pcall(function()
+		return HttpService:RequestAsync({
+			Url = url,
+			Method = method,
+			Headers = {
+				["Content-Type"] = "application/json",
+			},
+			Body = if body then HttpService:JSONEncode(body) else nil,
+			Compress = Enum.HttpCompression.None,
+		})
+	end)
+
+	return if ok and response.Success then response else nil
+end
+
+function MockWebSocketClient._OpenImpl(self: MockWebSocketClientPrivate)
+	assert(self.ConnectionState == EnumWebSocketState.Connecting, "WebSocket is not in the Connecting state")
+
+	self.ConnectionState = EnumWebSocketState.Open
+	self._OpenedEvent:Fire()
+
+	self._pollTask = task.spawn(function()
+		while self.ConnectionState == EnumWebSocketState.Open do
+			local response = doRequest(self._uri .. self._receiveEndpoint, "GET")
+
+			if response and response.Body then
+				self._MessageReceivedEvent:Fire(response.Body)
+			end
+
+			task.wait(POLL_WAIT_TIME)
+		end
+	end)
+end
+
+function MockWebSocketClient.Send(self: MockWebSocketClientPrivate, data: any)
+	doRequest(self._uri .. self._sendEndpoint, "POST", data)
+end
+
+function MockWebSocketClient.Close(self: MockWebSocketClientPrivate)
+	if CloseableStates[self.ConnectionState] then
+		self.ConnectionState = EnumWebSocketState.Closing
+
+		if self._pollTask and coroutine.status(self._pollTask) == "running" then
+			task.cancel(self._pollTask)
+			self._pollTask = nil :: any
+		end
+
+		self.ConnectionState = EnumWebSocketState.Closed
+		self._ClosedEvent:Fire()
+	end
+end
+
+-- START DEVIATION: These methods are not present in the real WebSocketClient instance
+function MockWebSocketClient.SetReceiveEndpoint(self: MockWebSocketClientPrivate, endpoint: string)
+	self._receiveEndpoint = endpoint
+end
+
+function MockWebSocketClient.SetSendEndpoint(self: MockWebSocketClientPrivate, endpoint: string)
+	self._sendEndpoint = endpoint
+end
+-- END DEVIATION
+
+local MockWebSocketService = {}
+MockWebSocketService.__index = MockWebSocketService
+
+type MockWebSocketService = {
+	CreateClient: (self: MockWebSocketService, uri: string) -> MockWebSocketClient,
+}
+
+function MockWebSocketService.CreateClient(_: MockWebSocketService, uri: string)
+	return MockWebSocketClient.new(uri)
+end
+
+return MockWebSocketService
+]]></string>
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="3">
+      <Properties>
+        <string name="Name">OutputCapture</string>
+        <string name="Source"><![CDATA[--[[
+	OutputCapture Module
+
+	Captures output from Roblox Studio's Output window using LogService.MessageOut.
+	Provides silent buffering to avoid feedback loops and supports filtering by message level.
+
+	THREAD SAFETY NOTE:
+	Luau in Roblox runs in a single-threaded environment. The LogService.MessageOut
+	callback and all read/clear operations execute on the same thread, so concurrent
+	access to the buffer is not possible. No explicit synchronization is needed.
+
+	CRITICAL: Never call print(), warn(), or error() inside the MessageOut handler
+	to prevent infinite recursion!
+
+	TIMESTAMP FORMAT:
+	Timestamps use os.clock() which returns high-precision elapsed time in seconds
+	since an arbitrary point (typically script start). Use for relative timing only,
+	not absolute wall-clock time.
+]]
+
+-- Configuration constants
+local MAX_BUFFER_SIZE = 10000 -- Maximum entries before FIFO eviction (memory bounded ~10MB)
+local DEFAULT_MAX_LINES = 1000 -- Default number of lines returned to caller
+
+-- Valid filter options
+local VALID_FILTERS = {
+	all = true,
+	print = true,
+	warn = true,
+	error = true,
+}
+
+-- Types
+type LogLevel = "print" | "warn" | "error"
+
+type LogEntry = {
+	timestamp: number, -- os.clock() value (seconds since script start)
+	messageType: Enum.MessageType,
+	message: string,
+	level: LogLevel,
+}
+
+type BufferStats = {
+	currentSize: number,
+	maxSize: number,
+	droppedCount: number,
+	oldestTimestamp: number?,
+	newestTimestamp: number?,
+}
+
+-- Buffer state
+local OutputBuffer = {
+	entries = {} :: { LogEntry },
+	maxSize = MAX_BUFFER_SIZE,
+	droppedCount = 0, -- Track messages lost to FIFO eviction
+	connection = nil :: RBXScriptConnection?,
+}
+
+--[[
+	Adds a message to the buffer silently (NO print/warn/error calls!)
+
+	@param messageType The Roblox MessageType enum value
+	@param message The message string
+]]
+local function addToBuffer(message: string, messageType: Enum.MessageType)
+	-- CRITICAL: NO print/warn/error calls here to avoid feedback loop!
+
+	-- Determine log level from messageType
+	local level: LogLevel
+	if messageType == Enum.MessageType.MessageWarning then
+		level = "warn"
+	elseif messageType == Enum.MessageType.MessageError then
+		level = "error"
+	else
+		level = "print"
+	end
+
+	-- Create log entry
+	local entry: LogEntry = {
+		timestamp = os.clock(),
+		messageType = messageType,
+		message = message,
+		level = level,
+	}
+
+	-- Add to buffer
+	table.insert(OutputBuffer.entries, entry)
+
+	-- FIFO eviction if buffer exceeds maxSize
+	if #OutputBuffer.entries > OutputBuffer.maxSize then
+		table.remove(OutputBuffer.entries, 1)
+		OutputBuffer.droppedCount += 1
+	end
+end
+
+--[[
+	Initializes the persistent LogService.MessageOut connection.
+	Should be called once at plugin startup.
+
+	This connection survives Play mode transitions and MCP connection toggles.
+]]
+local function initializeCapture()
+	if OutputBuffer.connection then
+		return -- Already initialized
+	end
+
+	local LogService = game:GetService("LogService")
+
+	-- Connect to MessageOut - captures ALL output messages system-wide
+	OutputBuffer.connection = LogService.MessageOut:Connect(function(message, messageType)
+		addToBuffer(message, messageType)
+	end)
+end
+
+--[[
+	Reads buffered output with optional filtering and limiting.
+
+	@param filter Filter by level: "all", "print", "warn", or "error"
+	@param maxLines Maximum number of lines to return (most recent)
+	@param clearAfterRead If true, clears the buffer after reading
+	@return Array of log entries matching the filter criteria
+]]
+local function readOutput(
+	filter: string?,
+	maxLines: number?,
+	clearAfterRead: boolean?
+): { LogEntry }
+	-- Apply defaults
+	filter = filter or "all"
+	maxLines = maxLines or DEFAULT_MAX_LINES
+	clearAfterRead = if clearAfterRead == nil then true else clearAfterRead
+
+	-- Filter entries by level
+	local filtered = {}
+
+	for _, entry in OutputBuffer.entries do
+		if filter == "all" or entry.level == filter then
+			table.insert(filtered, entry)
+		end
+	end
+
+	-- Limit to maxLines (return most recent)
+	local startIndex = math.max(1, #filtered - maxLines + 1)
+	local result = {}
+
+	for i = startIndex, #filtered do
+		table.insert(result, filtered[i])
+	end
+
+	-- Clear buffer if requested
+	if clearAfterRead then
+		OutputBuffer.entries = {}
+	end
+
+	return result
+end
+
+--[[
+	Formats log entries into a readable string for MCP response.
+
+	@param entries Array of log entries to format
+	@return Formatted string with [OUTPUT]/[WARNING]/[ERROR] prefixes
+]]
+local function formatEntries(entries: { LogEntry }): string
+	local lines = {}
+
+	for _, entry in entries do
+		-- Add appropriate prefix based on level
+		local prefix = if entry.level == "warn"
+			then "[WARNING]"
+			elseif entry.level == "error" then "[ERROR]"
+			else "[OUTPUT]"
+
+		table.insert(lines, prefix .. " " .. entry.message)
+	end
+
+	return table.concat(lines, "\n")
+end
+
+--[[
+	Clears all buffered output and resets the dropped counter.
+]]
+local function clearBuffer()
+	OutputBuffer.entries = {}
+	OutputBuffer.droppedCount = 0
+end
+
+--[[
+	Returns statistics about the current buffer state.
+	Useful for debugging and monitoring buffer health.
+
+	@return BufferStats table with current size, max size, dropped count, and timestamps
+]]
+local function getStats(): BufferStats
+	local entries = OutputBuffer.entries
+	local oldest = entries[1]
+	local newest = entries[#entries]
+
+	return {
+		currentSize = #entries,
+		maxSize = OutputBuffer.maxSize,
+		droppedCount = OutputBuffer.droppedCount,
+		oldestTimestamp = if oldest then oldest.timestamp else nil,
+		newestTimestamp = if newest then newest.timestamp else nil,
+	}
+end
+
+--[[
+	Disconnects the LogService connection and clears the buffer.
+	Useful for cleanup, though typically not needed during normal operation.
+]]
+local function shutdown()
+	if OutputBuffer.connection then
+		OutputBuffer.connection:Disconnect()
+		OutputBuffer.connection = nil
+	end
+	clearBuffer()
+end
+
+-- Public API
+return {
+	initialize = initializeCapture,
+	read = readOutput,
+	format = formatEntries,
+	clear = clearBuffer,
+	getStats = getStats,
+	shutdown = shutdown,
+
+	-- Constants exposed for validation
+	VALID_FILTERS = VALID_FILTERS,
+	DEFAULT_MAX_LINES = DEFAULT_MAX_LINES,
+	MAX_BUFFER_SIZE = MAX_BUFFER_SIZE,
+}
+]]></string>
+      </Properties>
+    </Item>
+    <Item class="Folder" referent="4">
+      <Properties>
+        <string name="Name">Tools</string>
+      </Properties>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">GetStudioState</string>
+          <string name="Source"><![CDATA[local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local Types = require(Main.Types)
+
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+
+local function getStudioState(): string
+	local isEdit = RunService:IsEdit()
+	local isRunning = RunService:IsRunning()
+	local isRunMode = RunService:IsRunMode()
+
+	local mode = "edit"
+	if isRunning then
+		if isRunMode then
+			-- Run mode (F8) - physics simulation without player character
+			mode = "simulation"
+		else
+			-- Play mode (F5) - playtest with player character
+			mode = "playtest"
+		end
+	end
+
+	local state = {
+		mode = mode,
+		isEdit = isEdit,
+		isRunning = isRunning,
+		isRunMode = isRunMode,
+		isPlaytest = isRunning and not isRunMode,
+		canModify = isEdit and not isRunning,
+	}
+
+	return HttpService:JSONEncode(state)
+end
+
+local function handleGetStudioState(args: Types.ToolArgs): string?
+	if not args["GetStudioState"] then
+		return nil
+	end
+
+	return getStudioState()
+end
+
+return handleGetStudioState :: Types.ToolFunction
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">InsertModel</string>
+          <string name="Source"><![CDATA[local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local Types = require(Main.Types)
+
+local INSERT_MAX_SEARCH_DEPTH = 2048
+local INSERT_MAX_DISTANCE_AWAY = 20
+
+local function getInsertPosition()
+	local camera = workspace.CurrentCamera
+	local viewportPoint = camera.ViewportSize / 2
+	local unitRay = camera:ViewportPointToRay(viewportPoint.X, viewportPoint.Y, 0)
+
+	local ray = Ray.new(unitRay.Origin, unitRay.Direction * INSERT_MAX_SEARCH_DEPTH)
+	local params = RaycastParams.new()
+	params.BruteForceAllSlow = true
+
+	local result = workspace:Raycast(ray.Origin, ray.Direction, params)
+
+	if result then
+		return result.Position
+	else
+		return camera.CFrame.Position + unitRay.Direction * INSERT_MAX_DISTANCE_AWAY
+	end
+end
+
+local InsertService = game:GetService("InsertService")
+
+type GetFreeModelsResponse = {
+	[number]: {
+		CurrentStartIndex: number,
+		TotalCount: number,
+		Results: {
+			[number]: {
+				Name: string,
+				AssetId: number,
+				AssetVersionId: number,
+				CreatorName: string,
+			},
+		},
+	},
+}
+
+local function toTitleCase(str: string): string
+	local function titleCase(first: string, rest: string)
+		return first:upper() .. rest:lower()
+	end
+
+	local intermediate = string.gsub(str, "(%a)([%w_']*)", titleCase :: (string) -> string)
+	return intermediate:gsub("%s+", "")
+end
+
+local function collapseObjectsIntoContainer(objects: { Instance }): Instance?
+	local isPhysical = false
+	for _, object in objects do
+		if object:IsA("PVInstance") then
+			isPhysical = true
+			break
+		end
+	end
+
+	if isPhysical then
+		local model = Instance.new("Model")
+		for _, object in objects do
+			object.Parent = model
+		end
+		return model
+	end
+
+	if #objects > 1 then
+		local folder = Instance.new("Folder")
+		for _, object in objects do
+			object.Parent = folder
+		end
+		return folder
+	end
+
+	return objects[1]
+end
+
+local function loadAsset(assetId: number): Instance?
+	local objects = game:GetObjects("rbxassetid://" .. assetId)
+	return collapseObjectsIntoContainer(objects)
+end
+
+local function getAssets(query: string): number?
+	local results: GetFreeModelsResponse = InsertService:GetFreeModels(query, 0)
+	local assets = {}
+	for i, result in results[1].Results do
+		if i > 6 then
+			break
+		end
+		table.insert(assets, result.AssetId)
+	end
+
+	return table.remove(assets, 1)
+end
+
+local function insertFromMarketplace(query: string): string
+	local primaryResult = getAssets(query)
+	if not primaryResult then
+		error("Failed to find asset")
+	end
+
+	local instance = loadAsset(primaryResult)
+	if not instance then
+		error("Failed to load asset")
+	end
+
+	local name = toTitleCase(query)
+	local i = 1
+	while workspace:FindFirstChild(name) do
+		name = query .. i
+		i += 1
+	end
+
+	instance.Name = name
+	instance.Parent = workspace
+
+	if instance:IsA("Model") then
+		instance:PivotTo(CFrame.new(getInsertPosition()))
+	end
+
+	return name
+end
+
+local function handleInsertModel(args: Types.ToolArgs): string?
+	if not args["InsertModel"] then
+		return nil
+	end
+
+	local insertModelArgs: Types.InsertModelArgs = args["InsertModel"]
+	if type(insertModelArgs.query) ~= "string" then
+		error("Missing query in InsertModel")
+	end
+
+	return insertFromMarketplace(insertModelArgs.query)
+end
+
+return handleInsertModel :: Types.ToolFunction
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="7">
+        <Properties>
+          <string name="Name">MoveCharacter</string>
+          <string name="Source"><![CDATA[--!strict
+-- MoveCharacter tool: Move or teleport a character in the workspace
+-- Works in simulation mode where the plugin has direct access to the game
+
+local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local Types = require(Main.Types)
+
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+
+-- Find a character model in workspace
+-- If characterName is provided, looks for that specific character
+-- Otherwise returns the first Model with a Humanoid
+local function findCharacter(characterName: string?): Model?
+	if characterName then
+		local character = workspace:FindFirstChild(characterName, true)
+		if character and character:IsA("Model") and character:FindFirstChildOfClass("Humanoid") then
+			return character
+		end
+		return nil
+	end
+
+	-- Find first character (Model with Humanoid)
+	for _, child in workspace:GetDescendants() do
+		if child:IsA("Model") and child:FindFirstChildOfClass("Humanoid") then
+			return child
+		end
+	end
+	return nil
+end
+
+local function moveCharacter(args: Types.MoveCharacterArgs): string
+	-- Note: During playtest, RunService:IsRunning() returns false from plugin context
+	-- but we can still manipulate workspace objects. We'll try and let it fail naturally.
+
+	local targetPosition = Vector3.new(args.x, args.y, args.z)
+	local instant = args.instant or false
+	local character = findCharacter(args.character_name)
+
+	if not character then
+		if args.character_name then
+			error(`Character '{args.character_name}' not found in workspace`)
+		else
+			error("No character found in workspace. Ensure there is a Model with a Humanoid.")
+		end
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+
+	if not humanoid then
+		error(`Character '{character.Name}' does not have a Humanoid`)
+	end
+
+	if not rootPart then
+		error(`Character '{character.Name}' does not have a HumanoidRootPart or PrimaryPart`)
+	end
+
+	local startPosition = rootPart.Position
+
+	if instant then
+		-- Teleport instantly
+		rootPart.CFrame = CFrame.new(targetPosition)
+		return HttpService:JSONEncode({
+			success = true,
+			action = "teleport",
+			character = character.Name,
+			from = { x = startPosition.X, y = startPosition.Y, z = startPosition.Z },
+			to = { x = targetPosition.X, y = targetPosition.Y, z = targetPosition.Z },
+		})
+	else
+		-- Walk to position using MoveTo
+		humanoid:MoveTo(targetPosition)
+		return HttpService:JSONEncode({
+			success = true,
+			action = "walk",
+			character = character.Name,
+			from = { x = startPosition.X, y = startPosition.Y, z = startPosition.Z },
+			to = { x = targetPosition.X, y = targetPosition.Y, z = targetPosition.Z },
+			note = "Character is walking to target. Use get_studio_state and screenshots to verify arrival.",
+		})
+	end
+end
+
+local function handleMoveCharacter(args: Types.ToolArgs): string?
+	local moveArgs = args["MoveCharacter"]
+	if not moveArgs then
+		return nil
+	end
+
+	return moveCharacter(moveArgs)
+end
+
+return handleMoveCharacter :: Types.ToolFunction
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">ReadOutput</string>
+          <string name="Source"><![CDATA[local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local Types = require(Main.Types)
+local OutputCapture = require(Main.OutputCapture)
+
+--[[
+	Handles the read_output MCP tool request.
+
+	Reads buffered output from the Output window with optional filtering and limiting.
+
+	@param args Tool arguments from MCP
+	@return Formatted output string, or nil if this handler doesn't match
+]]
+local function handleReadOutput(args: Types.ToolArgs): string?
+	-- Check if this is a ReadOutput request
+	if not args["ReadOutput"] then
+		return nil
+	end
+
+	local readOutputArgs: Types.ReadOutputArgs = args["ReadOutput"]
+
+	-- Extract parameters with defaults
+	local filter = readOutputArgs.filter or "all"
+	local maxLines = readOutputArgs.max_lines or OutputCapture.DEFAULT_MAX_LINES
+	local clearAfterRead = readOutputArgs.clear_after_read
+	if clearAfterRead == nil then
+		clearAfterRead = true
+	end
+
+	-- Validate filter parameter using exposed constants
+	if not OutputCapture.VALID_FILTERS[filter] then
+		local validOptions = {}
+		for key in OutputCapture.VALID_FILTERS do
+			table.insert(validOptions, '"' .. key .. '"')
+		end
+		table.sort(validOptions)
+		error(string.format("Invalid filter '%s'. Must be one of: %s", filter, table.concat(validOptions, ", ")))
+	end
+
+	-- Validate maxLines
+	if type(maxLines) ~= "number" or maxLines < 1 then
+		error("max_lines must be a positive number")
+	end
+
+	-- Get stats before reading (for dropped count)
+	local stats = OutputCapture.getStats()
+
+	-- Read buffered output
+	local entries = OutputCapture.read(filter, maxLines, clearAfterRead)
+
+	-- Handle empty buffer
+	if #entries == 0 then
+		local emptyMsg = "[No output captured]"
+		if stats.droppedCount > 0 then
+			emptyMsg = emptyMsg
+				.. string.format(" (Note: %d messages were dropped due to buffer overflow)", stats.droppedCount)
+		end
+		return emptyMsg
+	end
+
+	-- Format response with summary header
+	local formatted = OutputCapture.format(entries)
+	local summary = string.format(
+		"[Captured %d message%s (filter: %s, cleared: %s)]",
+		#entries,
+		if #entries == 1 then "" else "s",
+		filter,
+		tostring(clearAfterRead)
+	)
+
+	-- Add warning if messages were dropped
+	if stats.droppedCount > 0 then
+		summary = summary
+			.. string.format("\n[WARNING: %d messages were dropped due to buffer overflow]", stats.droppedCount)
+	end
+
+	return summary .. "\n\n" .. formatted
+end
+
+return handleReadOutput :: Types.ToolFunction
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">RunCode</string>
+          <string name="Source"><![CDATA[local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local Types = require(Main.Types)
+
+local HttpService = game:GetService("HttpService")
+
+local function runCodeWithOutput(command: string): string
+	local output = ""
+
+	local function getTableType(arg)
+		local hasArray = false
+		local hasTable = false
+		for key, _value in arg do
+			if typeof(key) == "number" then
+				hasArray = true
+			else
+				hasTable = true
+			end
+			if hasArray and hasTable then
+				break
+			end
+		end
+		return hasArray, hasTable
+	end
+
+	local function serializeTable(arg): any
+		if typeof(arg) == "table" then
+			local _, isTable = getTableType(arg)
+
+			local newArg = {}
+			for key, value in arg do
+				local newKey = serializeTable(key)
+				newArg[if isTable then tostring(newKey) else newKey] = serializeTable(value)
+			end
+			return newArg
+		elseif type(arg) == "userdata" then
+			return tostring(arg) or "UNABLE_TO_SERIALIZE"
+		end
+		return arg
+	end
+
+	local function deepClone(t, cache)
+		local clone = {}
+		for key, value in t do
+			local newKey = key
+			if typeof(key) == "table" then
+				if not cache[key] then
+					cache[key] = deepClone(key, cache)
+				end
+				newKey = cache[key]
+			end
+
+			local newValue = value
+			if typeof(value) == "table" then
+				if not cache[value] then
+					cache[value] = deepClone(value, cache)
+				end
+				newValue = cache[value]
+			end
+
+			clone[newKey] = newValue
+		end
+		return clone
+	end
+
+	local function toStrTable(t: { any }): { string }
+		local clonedTable = deepClone(t, {})
+		local strTable = table.create(#clonedTable)
+		for i, arg in clonedTable do
+			local serializedArg = serializeTable(arg)
+			if typeof(serializedArg) == "table" then
+				strTable[i] = HttpService:JSONEncode(serializedArg)
+			elseif typeof(serializedArg) == "boolean" then
+				-- Convert booleans to string to avoid concat error
+				strTable[i] = tostring(serializedArg)
+			else
+				strTable[i] = serializedArg
+			end
+		end
+		return strTable
+	end
+
+	local function addToOutput(header: string, ...)
+		local strResults = toStrTable(table.pack(...))
+		output ..= header .. " " .. table.concat(strResults, "\t") .. "\n"
+	end
+
+	local function executeCode()
+		local chunk = loadstring(command) :: any
+		local chunkfenv = getfenv(chunk)
+
+		local oldPrint = print
+		chunkfenv.print = function(...)
+			oldPrint(...)
+			addToOutput("[OUTPUT]", ...)
+		end
+
+		local oldWarn = warn
+		chunkfenv.warn = function(...)
+			oldWarn(...)
+			addToOutput("[WARNING]", ...)
+		end
+
+		local oldError = error
+		chunkfenv.error = function(...)
+			oldError(...)
+			addToOutput("[ERROR]", ...)
+		end
+
+		local results = table.pack(chunk())
+		if #results > 0 then
+			addToOutput("[RETURNED RESULTS]", table.unpack(results))
+		end
+
+		return results
+	end
+
+	local ok, errorMessage = pcall(executeCode)
+	if not ok then
+		addToOutput("[UNEXPECTED ERROR]", errorMessage)
+	end
+
+	return output
+end
+
+local function handleRunCode(args: Types.ToolArgs): string?
+	if not args["RunCode"] then
+		return nil
+	end
+
+	local runCodeArgs: Types.RunCodeArgs = args["RunCode"]
+	if type(runCodeArgs.command) ~= "string" then
+		error("Missing command in RunCode")
+	end
+
+	return runCodeWithOutput(runCodeArgs.command)
+end
+
+return handleRunCode :: Types.ToolFunction
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">Simulation</string>
+          <string name="Source"><![CDATA[local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local Types = require(Main.Types)
+
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+
+-- Configuration
+local VERIFICATION_TIMEOUT = 10 -- seconds to wait for state change
+local POLL_INTERVAL = 0.1 -- seconds between state checks
+
+-- Wait for RunService state to change with timeout
+local function waitForState(targetRunning: boolean, timeout: number): (boolean, string?)
+	local startTime = os.clock()
+
+	while os.clock() - startTime < timeout do
+		local isRunning = RunService:IsRunning()
+		if isRunning == targetRunning then
+			return true, nil
+		end
+		task.wait(POLL_INTERVAL)
+	end
+
+	return false, string.format(
+		"Timeout after %.1fs waiting for state change (expected IsRunning=%s, got %s)",
+		timeout, tostring(targetRunning), tostring(RunService:IsRunning())
+	)
+end
+
+local function startSimulation(): string
+	-- Check if already in playtest/simulation mode
+	if RunService:IsRunning() then
+		return HttpService:JSONEncode({
+			success = false,
+			error = "Studio is already running. Call stop_simulation first.",
+			currentMode = RunService:IsRunMode() and "simulation" or "playtest",
+		})
+	end
+
+	local success, err = pcall(function()
+		RunService:Run()
+	end)
+
+	if not success then
+		return HttpService:JSONEncode({
+			success = false,
+			error = "RunService:Run() failed: " .. tostring(err),
+		})
+	end
+
+	-- Verify simulation started
+	local verified, verifyErr = waitForState(true, VERIFICATION_TIMEOUT)
+
+	if verified then
+		return HttpService:JSONEncode({
+			success = true,
+			verified = true,
+			mode = "simulation",
+			note = "Started simulation mode (F8). Physics running without player.",
+		})
+	else
+		return HttpService:JSONEncode({
+			success = false,
+			error = "Simulation call succeeded but verification failed: " .. tostring(verifyErr),
+		})
+	end
+end
+
+local function stopSimulation(): string
+	-- Note: We cannot reliably check IsRunning() because it returns false from plugin
+	-- context during playtest due to DataModel isolation. We'll try to stop anyway.
+
+	local wasRunning = RunService:IsRunning()
+	local previousMode = RunService:IsRunMode() and "simulation" or "playtest"
+
+	local success, err = pcall(function()
+		RunService:Stop()
+	end)
+
+	if not success then
+		return HttpService:JSONEncode({
+			success = false,
+			error = "RunService:Stop() failed: " .. tostring(err),
+		})
+	end
+
+	-- For simulation mode, verification works. For playtest, IsRunning() was already false.
+	if wasRunning then
+		-- We were in simulation mode - verify it stopped
+		local verified, verifyErr = waitForState(false, VERIFICATION_TIMEOUT)
+		if verified then
+			return HttpService:JSONEncode({
+				success = true,
+				verified = true,
+				previousMode = previousMode,
+				mode = "edit",
+				note = "Stopped " .. previousMode .. ". Returned to edit mode.",
+			})
+		else
+			return HttpService:JSONEncode({
+				success = false,
+				error = "Stop call succeeded but verification failed: " .. tostring(verifyErr),
+				previousMode = previousMode,
+			})
+		end
+	else
+		-- IsRunning() was false - we're either in edit mode OR playtest mode
+		-- (can't tell from plugin context due to DataModel isolation)
+		-- RunService:Stop() only works for simulation mode, NOT playtest mode.
+		-- For playtest, user must manually stop OR use run_server_code with EndTest()
+		return HttpService:JSONEncode({
+			success = true,
+			mode = "edit",
+			note = "RunService:Stop() called. Note: This only stops SIMULATION mode. For PLAYTEST mode, use run_server_code to call StudioTestService:EndTest(), or manually press Stop (F6).",
+		})
+	end
+end
+
+local function handleSimulation(args: Types.ToolArgs): string?
+	if args["StartSimulation"] then
+		return startSimulation()
+	elseif args["StopSimulation"] or args["StopPlaytest"] then
+		return stopSimulation()
+	end
+	return nil
+end
+
+return handleSimulation :: Types.ToolFunction
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">StartPlaytest</string>
+          <string name="Source"><![CDATA[local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local Types = require(Main.Types)
+
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+
+-- Try to get StudioTestService (may not exist in older Studio versions)
+local StudioTestService = nil
+pcall(function()
+	StudioTestService = game:GetService("StudioTestService")
+end)
+
+-- Configuration
+local VERIFICATION_TIMEOUT = 10 -- seconds to wait for state change
+local POLL_INTERVAL = 0.1 -- seconds between state checks
+local MAX_RETRIES = 10 -- number of retries for pending operation error
+local RETRY_DELAY = 0.5 -- seconds between retries
+local ERROR_CHECK_DELAY = 0.3 -- seconds to wait for immediate errors
+
+-- Wait for RunService state to change with timeout
+local function waitForState(targetRunning: boolean, timeout: number): (boolean, string?)
+	local startTime = os.clock()
+
+	while os.clock() - startTime < timeout do
+		local isRunning = RunService:IsRunning()
+		if isRunning == targetRunning then
+			return true, nil
+		end
+		task.wait(POLL_INTERVAL)
+	end
+
+	return false, string.format(
+		"Timeout after %.1fs waiting for state change (expected IsRunning=%s, got %s)",
+		timeout, tostring(targetRunning), tostring(RunService:IsRunning())
+	)
+end
+
+local function startPlaytest(): string
+	-- Note: We cannot reliably check if already running because RunService:IsRunning()
+	-- returns false from plugin context during playtest due to DataModel isolation.
+	-- StudioTestService will return an error if playtest is already running.
+
+	-- Try StudioTestService first (starts with player character)
+	if StudioTestService then
+		local lastError = nil
+
+		for attempt = 1, MAX_RETRIES do
+			-- Use task.spawn because ExecutePlayModeAsync blocks until playtest starts.
+			-- We need to return the HTTP response reasonably quickly.
+			local startError = nil
+			local completed = false
+
+			task.spawn(function()
+				local success, err = pcall(function()
+					StudioTestService:ExecutePlayModeAsync({})
+				end)
+				completed = true
+				if not success then
+					startError = tostring(err)
+				end
+			end)
+
+			-- Wait a short time for immediate errors (like "pending" or "already running")
+			task.wait(ERROR_CHECK_DELAY)
+
+			if completed and startError then
+				-- Got an immediate error
+				lastError = startError
+
+				-- Check if it's the "pending operation" error - if so, retry after delay
+				if string.find(startError, "Previous call to start play session has not been completed") then
+					if attempt < MAX_RETRIES then
+						warn(string.format("[MCP] Playtest pending, retry %d/%d in %.1fs...", attempt, MAX_RETRIES, RETRY_DELAY))
+						task.wait(RETRY_DELAY)
+						continue
+					end
+				else
+					-- Different error, don't retry
+					break
+				end
+			elseif not completed then
+				-- No immediate error and still running = playtest is starting successfully
+				return HttpService:JSONEncode({
+					success = true,
+					mode = "playtest",
+					hasPlayer = true,
+					note = "Started playtest mode (F5) via StudioTestService.",
+					attempts = attempt,
+				})
+			else
+				-- Completed with no error = success
+				return HttpService:JSONEncode({
+					success = true,
+					mode = "playtest",
+					hasPlayer = true,
+					note = "Started playtest mode (F5) via StudioTestService.",
+					attempts = attempt,
+				})
+			end
+		end
+
+		return HttpService:JSONEncode({
+			success = false,
+			error = "ExecutePlayModeAsync failed: " .. (lastError or "unknown error"),
+			suggestion = "Press F6 to manually stop any pending playtest, then try again.",
+		})
+	end
+
+	-- Fallback: StudioTestService not available, use RunService:Run() (simulation mode)
+	local success, err = pcall(function()
+		RunService:Run()
+	end)
+
+	if not success then
+		return HttpService:JSONEncode({
+			success = false,
+			error = "RunService:Run() failed: " .. tostring(err),
+		})
+	end
+
+	-- For simulation mode, RunService:IsRunning() DOES work from plugin context
+	-- because simulation runs in the same DataModel
+	local verified, verifyErr = waitForState(true, VERIFICATION_TIMEOUT)
+
+	if verified then
+		return HttpService:JSONEncode({
+			success = true,
+			verified = true,
+			mode = "simulation",
+			note = "Started simulation mode (F8) - StudioTestService not available.",
+			hasPlayer = false,
+		})
+	else
+		return HttpService:JSONEncode({
+			success = false,
+			error = "Simulation started but verification failed: " .. tostring(verifyErr),
+		})
+	end
+end
+
+local function handleStartPlaytest(args: Types.ToolArgs): string?
+	if not args["StartPlaytest"] then
+		return nil
+	end
+
+	return startPlaytest()
+end
+
+return handleStartPlaytest :: Types.ToolFunction
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="12">
+        <Properties>
+          <string name="Name">WriteScript</string>
+          <string name="Source"><![CDATA[local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local Types = require(Main.Types)
+
+local ScriptEditorService = game:GetService("ScriptEditorService")
+
+type WriteScriptArgs = {
+	path: string,
+	source: string,
+	script_type: string?,
+}
+
+local SCRIPT_CLASSES = {
+	Script = "Script",
+	LocalScript = "LocalScript",
+	ModuleScript = "ModuleScript",
+}
+
+local function navigateToParent(path: string, createIfMissing: boolean): (Instance?, string?)
+	local parts = string.split(path, ".")
+	if #parts < 2 then
+		return nil, "Path must include at least a service and script name (e.g., 'ServerScriptService.MyScript')"
+	end
+
+	-- Get the root service/container
+	local rootName = parts[1]
+	local current: Instance? = game:FindFirstChild(rootName)
+	if not current then
+		return nil, "Service or container not found: " .. rootName
+	end
+
+	-- Navigate to the parent of the script (all parts except the last one)
+	for i = 2, #parts - 1 do
+		local childName = parts[i]
+		local child = current:FindFirstChild(childName)
+
+		if not child then
+			if createIfMissing then
+				-- Create a folder for intermediate path segments
+				local folder = Instance.new("Folder")
+				folder.Name = childName
+				folder.Parent = current
+				child = folder
+			else
+				return nil, "Path segment not found: " .. childName
+			end
+		end
+
+		current = child
+	end
+
+	return current, nil
+end
+
+local function getOrCreateScript(
+	path: string,
+	scriptType: string,
+	createIfMissing: boolean
+): (LuaSourceContainer?, string?)
+	local parts = string.split(path, ".")
+	local scriptName = parts[#parts]
+
+	local parent, err = navigateToParent(path, createIfMissing)
+	if err then
+		return nil, err
+	end
+
+	-- Look for existing script
+	local existingScript = parent:FindFirstChild(scriptName)
+
+	if existingScript then
+		-- Verify it's a script type
+		if existingScript:IsA("LuaSourceContainer") then
+			return existingScript :: LuaSourceContainer, nil
+		else
+			return nil, "Object exists at path but is not a script: " .. existingScript.ClassName
+		end
+	end
+
+	-- Create new script if allowed
+	if createIfMissing then
+		local className = SCRIPT_CLASSES[scriptType]
+		if not className then
+			return nil, "Invalid script_type: "
+				.. scriptType
+				.. ". Must be Script, LocalScript, or ModuleScript"
+		end
+
+		local newScript = Instance.new(className) :: LuaSourceContainer
+		newScript.Name = scriptName
+		newScript.Parent = parent
+		return newScript, nil
+	end
+
+	return nil, "Script not found: " .. scriptName
+end
+
+local function writeScriptSource(scriptInstance: LuaSourceContainer, source: string): (boolean, string?)
+	local success, result = pcall(function()
+		ScriptEditorService:UpdateSourceAsync(scriptInstance, function(_oldSource)
+			return source
+		end)
+	end)
+
+	if success then
+		return true, nil
+	else
+		return false, tostring(result)
+	end
+end
+
+local function handleWriteScript(args: Types.ToolArgs): string?
+	if not args["WriteScript"] then
+		return nil
+	end
+
+	local writeArgs: WriteScriptArgs = args["WriteScript"]
+
+	-- Validate required parameters
+	if type(writeArgs.path) ~= "string" or writeArgs.path == "" then
+		return "[ERROR] Missing or empty script_path parameter"
+	end
+
+	if type(writeArgs.source) ~= "string" then
+		return "[ERROR] Missing source parameter"
+	end
+
+	-- Use script_type parameter or default to "Script"
+	local scriptType = writeArgs.script_type or "Script"
+	local createIfMissing = true
+
+	-- Get or create the script
+	local scriptInstance, err = getOrCreateScript(writeArgs.path, scriptType, createIfMissing)
+	if err then
+		return "[ERROR] " .. err
+	end
+
+	-- Write the source code
+	local success, writeErr = writeScriptSource(scriptInstance, writeArgs.source)
+	if not success then
+		return "[ERROR] Failed to write script source: " .. (writeErr or "Unknown error")
+	end
+
+	local action = if scriptInstance.Parent and scriptInstance.Parent:FindFirstChild(scriptInstance.Name) == scriptInstance
+		then "Updated"
+		else "Created"
+
+	return string.format(
+		"[SUCCESS] %s %s at %s (%d characters)",
+		action,
+		scriptInstance.ClassName,
+		writeArgs.path,
+		#writeArgs.source
+	)
+end
+
+return handleWriteScript :: Types.ToolFunction
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="ModuleScript" referent="13">
+      <Properties>
+        <string name="Name">Types</string>
+        <string name="Source"><![CDATA[export type InsertModelArgs = {
+	query: string,
+}
+
+export type RunCodeArgs = {
+	command: string,
+}
+
+export type WriteScriptArgs = {
+	path: string,
+	source: string,
+}
+
+export type ReadOutputArgs = {
+	filter: string?, -- "all" | "print" | "warn" | "error"
+	max_lines: number?, -- Maximum number of lines to return (default: 1000)
+	clear_after_read: boolean?, -- Clear buffer after reading (default: true)
+}
+
+export type GetStudioStateArgs = {}
+
+export type StartPlaytestArgs = {}
+
+export type StartSimulationArgs = {}
+
+export type StopSimulationArgs = {}
+
+export type StopPlaytestArgs = {}
+
+export type MoveCharacterArgs = {
+	x: number,
+	y: number,
+	z: number,
+	instant: boolean?, -- If true, teleport. If false/nil, walk to position
+	character_name: string?, -- Optional character name, otherwise moves first character found
+}
+
+export type SimulateInputArgs = {
+	input_type: string, -- "keyboard" or "mouse"
+	key: string, -- Key name (e.g., "W", "Space") or mouse button ("Left", "Right")
+	action: string, -- "begin", "end", or "tap"
+	mouse_x: number?, -- Mouse X position (for mouse input)
+	mouse_y: number?, -- Mouse Y position (for mouse input)
+}
+
+export type ClickGuiArgs = {
+	path: string, -- Path to GUI element (e.g., "PlayerGui.MainUI.Button")
+}
+
+export type ToolArgs =
+	{ InsertModel: InsertModelArgs }
+	| { RunCode: RunCodeArgs }
+	| { WriteScript: WriteScriptArgs }
+	| { ReadOutput: ReadOutputArgs }
+	| { GetStudioState: GetStudioStateArgs }
+	| { StartPlaytest: StartPlaytestArgs }
+	| { StartSimulation: StartSimulationArgs }
+	| { StopSimulation: StopSimulationArgs }
+	| { StopPlaytest: StopPlaytestArgs }
+	| { MoveCharacter: MoveCharacterArgs }
+	| { SimulateInput: SimulateInputArgs }
+	| { ClickGui: ClickGuiArgs }
+
+export type ToolFunction = (ToolArgs) -> string?
+
+return {}
+]]></string>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>
