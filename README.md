@@ -93,7 +93,7 @@ To make sure everything is set up correctly, follow these steps:
    which you can also verify in the console output.
 1. Verify that Claude Desktop is correctly configured by clicking on the hammer icon for MCP tools
    beneath the text field where you enter prompts. This should open a window with the list of
-   available Roblox Studio tools (`insert_model` and `run_code`).
+   available Roblox Studio tools (`insert_model`, `run_code`, and `preview_layout`).
 
 **Note**: You can fix common issues with setup by restarting Studio and Claude Desktop. Claude
 sometimes is hidden in the system tray, so ensure you've exited it completely.

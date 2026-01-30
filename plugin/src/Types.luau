@@ -6,7 +6,13 @@ export type RunCodeArgs = {
 	command: string,
 }
 
-export type ToolArgs = { InsertModel: InsertModelArgs } | { RunCode: RunCodeArgs }
+export type PreviewLayoutArgs = {
+	width: number,
+	height: number,
+	path: string?,
+}
+
+export type ToolArgs = { InsertModel: InsertModelArgs } | { RunCode: RunCodeArgs } | { PreviewLayout: PreviewLayoutArgs }
 
 export type ToolFunction = (ToolArgs) -> string?
 

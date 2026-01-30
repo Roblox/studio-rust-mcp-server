@@ -100,6 +100,7 @@ struct RunCode {
     #[schemars(description = "Code to run")]
     command: String,
 }
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 struct InsertModel {
     #[schemars(description = "Query to search for the model")]
@@ -107,9 +108,20 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct PreviewLayout {
+    #[schemars(description = "Target viewport width in pixels (e.g., 390 for iPhone 14)")]
+    width: f64,
+    #[schemars(description = "Target viewport height in pixels (e.g., 844 for iPhone 14)")]
+    height: f64,
+    #[schemars(description = "Optional path to specific ScreenGui. If not specified, previews all ScreenGuis.")]
+    path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    PreviewLayout(PreviewLayout),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -139,6 +151,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Calculates what UI layout would look like at a specific viewport size (e.g., mobile device). Returns JSON with element positions and sizes, identifying elements that would be offscreen or overlapping. Useful for checking mobile layouts without the Device Emulator."
+    )]
+    async fn preview_layout(
+        &self,
+        Parameters(args): Parameters<PreviewLayout>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::PreviewLayout(args))
             .await
     }
 
