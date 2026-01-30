@@ -104,3 +104,25 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### get_studio_state
+Returns the current Studio mode: `edit`, `run` (simulation), or `play` (playtest).
+
+### start_playtest
+Starts playtest mode (F5) with a player character. Use this to test gameplay.
+
+### start_simulation
+Starts simulation/run mode (F8) without a player character. Use this to test physics and scripts.
+
+### stop_simulation / stop_playtest
+Stops simulation mode and returns to edit mode.
+
+> **Note:** Due to Roblox's DataModel isolation, `stop_playtest` cannot stop playtest mode (F5) from the plugin. To stop playtest programmatically, use `run_server_code` with `MCPServerCodeRunner` installed, or press F6 manually.

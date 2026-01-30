@@ -107,9 +107,29 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct GetStudioState {}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct StartPlaytest {}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct StartSimulation {}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct StopSimulation {}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct StopPlaytest {}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    GetStudioState(GetStudioState),
+    StartPlaytest(StartPlaytest),
+    StartSimulation(StartSimulation),
+    StopSimulation(StopSimulation),
+    StopPlaytest(StopPlaytest),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -139,6 +159,61 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Gets the current Studio mode (edit/play/run) to determine if workspace modifications are safe"
+    )]
+    async fn get_studio_state(
+        &self,
+        Parameters(_args): Parameters<GetStudioState>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::GetStudioState(GetStudioState {}))
+            .await
+    }
+
+    #[tool(
+        description = "Starts playtest mode with a player character. Use this to test gameplay with player controls."
+    )]
+    async fn start_playtest(
+        &self,
+        Parameters(_args): Parameters<StartPlaytest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::StartPlaytest(StartPlaytest {}))
+            .await
+    }
+
+    #[tool(
+        description = "Starts simulation mode (run) without a player character. Use this to test physics and scripts without player interaction."
+    )]
+    async fn start_simulation(
+        &self,
+        Parameters(_args): Parameters<StartSimulation>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::StartSimulation(StartSimulation {}))
+            .await
+    }
+
+    #[tool(
+        description = "Stops playtest or simulation mode and returns to edit mode."
+    )]
+    async fn stop_simulation(
+        &self,
+        Parameters(_args): Parameters<StopSimulation>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::StopSimulation(StopSimulation {}))
+            .await
+    }
+
+    #[tool(
+        description = "Stops playtest or simulation mode and returns to edit mode. Alias for stop_simulation."
+    )]
+    async fn stop_playtest(
+        &self,
+        Parameters(_args): Parameters<StopPlaytest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::StopPlaytest(StopPlaytest {}))
             .await
     }
 
