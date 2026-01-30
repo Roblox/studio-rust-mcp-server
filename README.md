@@ -104,3 +104,27 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### preview_layout
+Calculates what UI layout would look like at a specific viewport size (e.g., mobile device) without requiring the Device Emulator.
+
+**Parameters:**
+- `width`: Target viewport width in pixels (e.g., `390` for iPhone 14)
+- `height`: Target viewport height in pixels (e.g., `844` for iPhone 14)
+- `path`: Optional path to ScreenGui (e.g., `"StarterGui.MainUI"`). If not specified, previews all ScreenGuis.
+
+**Returns JSON with:**
+- Element positions and sizes at target viewport
+- `offscreen` flag for elements extending beyond viewport
+- `clipped` flag for partially visible elements
+- Summary of total elements and issues found
+
+**Example prompt:** "Preview my UI at iPhone 14 dimensions (390x844)"
