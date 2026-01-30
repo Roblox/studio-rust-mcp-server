@@ -15,4 +15,4 @@ Please be civil and kind in all interactions. We're all here to build something 
 
 ## Pull Request Guidelines
 
-When submitting a PR, please follow the instructions in our [PR template](PULL_REQUEST_TEMPLATE.md). 
+When submitting a PR, please follow the instructions in our [PR template](/.github/PULL_REQUEST_TEMPLATE.md). 
