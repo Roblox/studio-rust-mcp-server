@@ -107,9 +107,24 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct WriteScript {
+    #[schemars(description = "Path to script in game hierarchy (e.g., 'ServerScriptService.GameManager')")]
+    path: String,
+
+    #[schemars(description = "The Luau source code to write to the script")]
+    source: String,
+
+    #[schemars(
+        description = "Type of script to create: 'Script', 'LocalScript', or 'ModuleScript'. Defaults to 'Script'. Only used when creating new scripts."
+    )]
+    script_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    WriteScript(WriteScript),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -139,6 +154,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Creates or updates a Script, LocalScript, or ModuleScript with the provided Luau source code. Uses ScriptEditorService to safely write script source."
+    )]
+    async fn write_script(
+        &self,
+        Parameters(args): Parameters<WriteScript>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::WriteScript(args))
             .await
     }
 

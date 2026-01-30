@@ -104,3 +104,23 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### write_script
+Creates or updates a Script, LocalScript, or ModuleScript with provided Luau source code.
+
+**Parameters:**
+- `path`: Path in game hierarchy (e.g., `"ServerScriptService.GameManager"`)
+- `source`: The Luau source code to write
+- `script_type`: `"Script"` (default), `"LocalScript"`, or `"ModuleScript"`
+
+Automatically creates intermediate folders for nested paths.
+
+**Example prompt:** "Create a script in ServerScriptService that prints 'Hello World' when the game starts"
