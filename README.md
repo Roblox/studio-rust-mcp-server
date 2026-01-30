@@ -93,7 +93,7 @@ To make sure everything is set up correctly, follow these steps:
    which you can also verify in the console output.
 1. Verify that Claude Desktop is correctly configured by clicking on the hammer icon for MCP tools
    beneath the text field where you enter prompts. This should open a window with the list of
-   available Roblox Studio tools (`insert_model` and `run_code`).
+   available Roblox Studio tools (`insert_model`, `run_code`, `write_script`, and `read_script`).
 
 **Note**: You can fix common issues with setup by restarting Studio and Claude Desktop. Claude
 sometimes is hidden in the system tray, so ensure you've exited it completely.
@@ -124,3 +124,13 @@ Creates or updates a Script, LocalScript, or ModuleScript with provided Luau sou
 Automatically creates intermediate folders for nested paths.
 
 **Example prompt:** "Create a script in ServerScriptService that prints 'Hello World' when the game starts"
+
+### read_script
+Reads the source code of an existing Script, LocalScript, or ModuleScript.
+
+**Parameters:**
+- `path`: Path in game hierarchy (e.g., `"ServerScriptService.GameManager"`)
+
+Returns the full source code with metadata (type, path, character count, line count).
+
+**Example prompt:** "Show me the source code of the script at ServerScriptService.GameManager"
