@@ -104,3 +104,32 @@ sometimes is hidden in the system tray, so ensure you've exited it completely.
 1. Type a prompt in Claude Desktop and accept any permissions to communicate with Studio.
 1. Verify that the intended action is performed in Studio by checking the console, inspecting the
    data model in Explorer, or visually confirming the desired changes occurred in your place.
+
+## Available Tools
+
+### run_code
+Executes Luau code in the Studio plugin context and returns printed output.
+
+### insert_model
+Searches the Roblox marketplace and inserts a model into the workspace.
+
+### run_server_code
+Executes Luau code in the **server context** during playtest. Unlike `run_code` which runs in the plugin, this runs where ServerScriptService scripts execute.
+
+**Setup Required:**
+1. Copy `MCPServerCodeRunner.lua` to ServerScriptService in your game
+2. Enable HttpService: Game Settings > Security > Allow HTTP Requests
+3. Start playtest (F5)
+
+### fire_remote
+Fires a RemoteEvent to clients during playtest. Requires `MCPServerCodeRunner` setup.
+
+**Parameters:**
+- `path`: Path to RemoteEvent (e.g., `"ReplicatedStorage.Remotes.GameEvent"`)
+- `direction`: `"ToClient"` or `"ToAllClients"`
+- `args`: Optional JSON array of arguments
+- `player_name`: Required for `"ToClient"` direction
+
+> **Note:** `"ToServer"` direction is not supported because MCP runs on the server and `RemoteEvent.OnServerEvent` cannot be manually triggered.
+
+**Example prompt:** "Fire the GameStart remote to all clients"
