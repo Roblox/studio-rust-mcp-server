@@ -105,13 +105,42 @@ local toggleButton = toolbar:CreateButton("Toggle MCP", "Toggle connection to th
 toggleButton.ClickableWhenViewportHidden = true
 toggleButton:SetActive(currentClient ~= nil)
 
+local widgetInfo = DockWidgetPluginGuiInfo.new(
+	Enum.InitialDockState.Right,
+	true,
+	false,
+	240,
+	80,
+	200,
+	60
+)
+local statusWidget = plugin:CreateDockWidgetPluginGui("MCPStatus", widgetInfo)
+statusWidget.Title = "MCP Status"
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.BackgroundTransparency = 1
+statusLabel.Size = UDim2.fromScale(1, 1)
+statusLabel.Font = Enum.Font.SourceSansSemibold
+statusLabel.TextSize = 18
+statusLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+statusLabel.Parent = statusWidget
+
+local function updateStatus(isConnected: boolean)
+	toggleButton:SetActive(isConnected)
+	statusLabel.Text = if isConnected then "MCP Server: ON" else "MCP Server: OFF"
+end
+
+updateStatus(currentClient ~= nil)
+
 toggleButton.Click:Connect(function()
 	if not currentClient then
 		currentClient = connectWebSocket()
 		print("The MCP Studio plugin is ready for prompts.")
+		updateStatus(true)
 	else
 		currentClient:Close()
 		currentClient = nil
 		print("The MCP Studio plugin is stopped.")
+		updateStatus(false)
 	end
 end)
