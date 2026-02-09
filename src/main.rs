@@ -52,6 +52,7 @@ async fn main() -> Result<()> {
             .route("/request", get(request_handler))
             .route("/response", post(response_handler))
             .route("/proxy", post(proxy_handler))
+            .route("/mcp/input", get(input_poll_handler))
             .with_state(server_state_clone);
         tracing::info!("This MCP instance is HTTP server listening on {STUDIO_PLUGIN_PORT}");
         tokio::spawn(async {
