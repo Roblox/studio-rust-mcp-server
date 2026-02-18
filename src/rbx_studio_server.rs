@@ -106,8 +106,7 @@ struct InsertModel {
     query: String,
 }
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
-struct GetConsoleOutput {
-}
+struct GetConsoleOutput {}
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 struct StartStopPlay {
@@ -153,9 +152,7 @@ impl RBXStudioServer {
             .await
     }
 
-    #[tool(
-        description = "Get the console output from Roblox Studio."
-    )]
+    #[tool(description = "Get the console output from Roblox Studio.")]
     async fn get_console_output(
         &self,
         Parameters(args): Parameters<GetConsoleOutput>,
@@ -164,9 +161,7 @@ impl RBXStudioServer {
             .await
     }
 
-    #[tool(
-        description = "Start or stop play mode or run the server."
-    )]
+    #[tool(description = "Start or stop play mode or run the server.")]
     async fn start_stop_play(
         &self,
         Parameters(args): Parameters<StartStopPlay>,
