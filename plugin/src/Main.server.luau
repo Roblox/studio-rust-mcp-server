@@ -1,5 +1,9 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local ConsoleOutput = require(Main.Utils.ConsoleOutput)
+local DataModelType = require(Main.Utils.DataModelType)
+local GameStopUtil = require(Main.Utils.GameStopUtil)
 local MockWebSocketService = require(Main.MockWebSocketService)
+local PluginUtils = require(Main.Utils.PluginUtils)
 local Types = require(Main.Types)
 
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
@@ -11,9 +15,22 @@ local URI = "http://localhost:44755"
 local RECEIVE_ENDPOINT = "/request"
 local SEND_ENDPOINT = "/response"
 
+PluginUtils.plugin = plugin
+
+local datamodelType = DataModelType.getDataModelType()
+
+if datamodelType == "Server" then
+	task.spawn(GameStopUtil.monitorForStopPlay)
+end
+
 if RunService:IsRunning() then
 	return
 end
+
+local connMessageOut = ConsoleOutput.startListener()
+plugin.Unloading:Connect(function()
+	connMessageOut:Disconnect()
+end)
 
 local old_warn = warn
 local function log(...)

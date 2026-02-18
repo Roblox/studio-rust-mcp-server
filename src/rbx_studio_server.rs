@@ -105,11 +105,22 @@ struct InsertModel {
     #[schemars(description = "Query to search for the model")]
     query: String,
 }
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct GetConsoleOutput {
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct StartStopPlay {
+    #[schemars(description = "Mode to start or stop, must be start_play, stop, or run_server")]
+    mode: String,
+}
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    GetConsoleOutput(GetConsoleOutput),
+    StartStopPlay(StartStopPlay),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -139,6 +150,28 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Get the console output from Roblox Studio."
+    )]
+    async fn get_console_output(
+        &self,
+        Parameters(args): Parameters<GetConsoleOutput>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::GetConsoleOutput(args))
+            .await
+    }
+
+    #[tool(
+        description = "Start or stop play mode or run the server."
+    )]
+    async fn start_stop_play(
+        &self,
+        Parameters(args): Parameters<StartStopPlay>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::StartStopPlay(args))
             .await
     }
 

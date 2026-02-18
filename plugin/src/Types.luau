@@ -6,7 +6,17 @@ export type RunCodeArgs = {
 	command: string,
 }
 
-export type ToolArgs = { InsertModel: InsertModelArgs } | { RunCode: RunCodeArgs }
+type StartStopPlayMode = "start_play" | "run_server" | "stop"
+
+export type StartStopPlayArgs = {
+	mode: StartStopPlayMode,
+}
+
+export type ToolArgs =
+	{}
+	| { InsertModel: InsertModelArgs }
+	| { RunCode: RunCodeArgs }
+	| { StartStopPlay: StartStopPlayArgs }
 
 export type ToolFunction = (ToolArgs) -> string?
 
