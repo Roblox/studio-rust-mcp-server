@@ -77,7 +77,7 @@ local function doRequest(url: string, method: "GET" | "POST", body: any)
 		})
 	end)
 
-	return if ok and response.Success then response else nil
+	return response
 end
 
 function MockWebSocketClient._OpenImpl(self: MockWebSocketClientPrivate)
@@ -90,8 +90,11 @@ function MockWebSocketClient._OpenImpl(self: MockWebSocketClientPrivate)
 		while self.ConnectionState == EnumWebSocketState.Open do
 			local response = doRequest(self._uri .. self._receiveEndpoint, "GET")
 
-			if response and response.Body then
+			if response.StatusCode == 200 and response.Success then
 				self._MessageReceivedEvent:Fire(response.Body)
+				continue
+			elseif response.StatusCode == 423 then
+				continue
 			end
 
 			task.wait(POLL_WAIT_TIME)
