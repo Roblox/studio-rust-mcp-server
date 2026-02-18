@@ -176,14 +176,14 @@ impl RBXStudioServer {
 
 pub async fn request_handler(State(state): State<PackedState>) -> Result<impl IntoResponse> {
     let timeout = tokio::time::timeout(LONG_POLL_DURATION, async {
+        let mut waiter = { state.lock().await.waiter.clone() };
         loop {
-            let mut waiter = {
+            {
                 let mut state = state.lock().await;
                 if let Some(task) = state.process_queue.pop_front() {
                     return Ok::<ToolArguments, Error>(task);
                 }
-                state.waiter.clone()
-            };
+            }
             waiter.changed().await?
         }
     })
