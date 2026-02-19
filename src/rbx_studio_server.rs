@@ -115,11 +115,22 @@ struct StartStopPlay {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct RunScriptInPlayMode {
+    #[schemars(description = "Code to run")]
+    code: String,
+    #[schemars(description = "Timeout in seconds, defaults to 100 seconds")]
+    timeout: Option<u32>,
+    #[schemars(description = "Mode to run in, must be start_play or run_server")]
+    mode: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
     GetConsoleOutput(GetConsoleOutput),
     StartStopPlay(StartStopPlay),
+    RunScriptInPlayMode(RunScriptInPlayMode),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -167,6 +178,18 @@ impl RBXStudioServer {
         Parameters(args): Parameters<StartStopPlay>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::StartStopPlay(args))
+            .await
+    }
+
+    #[tool(
+        description = "Run a script in play mode and automatically stop play after script finishes or timeout. Returns the output of the script.
+        Result format: { success: boolean, value: string, error: string, logs: { level: string, message: string, ts: number }[], errors: { level: string, message: string, ts: number }[], duration: number, isTimeout: boolean }"
+    )]
+    async fn run_script_in_play_mode(
+        &self,
+        Parameters(args): Parameters<RunScriptInPlayMode>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::RunScriptInPlayMode(args))
             .await
     }
 
