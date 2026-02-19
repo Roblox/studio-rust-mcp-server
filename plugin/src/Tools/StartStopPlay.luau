@@ -3,9 +3,11 @@ local Types = require(Main.Types)
 local StudioTestService = game:GetService("StudioTestService")
 local ConsoleOutput = require(Main.Utils.ConsoleOutput)
 local GameStopUtil = require(Main.Utils.GameStopUtil)
+local GlobalVariables = require(Main.Utils.GlobalVariables)
 
 local function startPlay(): string?
 	ConsoleOutput.outputMessage = ""
+	GlobalVariables.studioMode = "start_play"
 	task.spawn(function()
 		StudioTestService:ExecutePlayModeAsync({})
 	end)
@@ -14,10 +16,12 @@ end
 
 local function stop(): string?
 	GameStopUtil.stopPlay()
+	GlobalVariables.studioMode = "stop"
 	return "Stopped"
 end
 
 local function runServer(): string?
+	GlobalVariables.studioMode = "run_server"
 	task.spawn(function()
 		StudioTestService:ExecuteRunModeAsync({})
 	end)

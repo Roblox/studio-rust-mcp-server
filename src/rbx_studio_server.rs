@@ -105,8 +105,12 @@ struct InsertModel {
     #[schemars(description = "Query to search for the model")]
     query: String,
 }
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 struct GetConsoleOutput {}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct GetStudioMode {}
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 struct StartStopPlay {
@@ -131,6 +135,7 @@ enum ToolArgumentValues {
     GetConsoleOutput(GetConsoleOutput),
     StartStopPlay(StartStopPlay),
     RunScriptInPlayMode(RunScriptInPlayMode),
+    GetStudioMode(GetStudioMode),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -190,6 +195,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<RunScriptInPlayMode>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::RunScriptInPlayMode(args))
+            .await
+    }
+
+    #[tool(
+        description = "Get the current studio mode. Returns the studio mode. The result will be one of start_play, run_server, or stop."
+    )]
+    async fn get_studio_mode(
+        &self,
+        Parameters(args): Parameters<GetStudioMode>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::GetStudioMode(args))
             .await
     }
 
