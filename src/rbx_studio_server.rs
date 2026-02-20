@@ -114,7 +114,9 @@ struct GetStudioMode {}
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 struct StartStopPlay {
-    #[schemars(description = "Mode to start or stop, must be start_play, stop, or run_server. Don't use run_server unless you are sure no client/player is needed.")]
+    #[schemars(
+        description = "Mode to start or stop, must be start_play, stop, or run_server. Don't use run_server unless you are sure no client/player is needed."
+    )]
     mode: String,
 }
 
@@ -177,7 +179,9 @@ impl RBXStudioServer {
             .await
     }
 
-    #[tool(description = "Start or stop play mode or run the server, Don't enter run_server mode unless you are sure no client/player is needed.")]
+    #[tool(
+        description = "Start or stop play mode or run the server, Don't enter run_server mode unless you are sure no client/player is needed."
+    )]
     async fn start_stop_play(
         &self,
         Parameters(args): Parameters<StartStopPlay>,
