@@ -22,7 +22,16 @@ subject to their respective terms and conditions.
 
 ![Scheme](MCP-Server.png)
 
-The setup process also contains a short plugin installation and Claude Desktop configuration script.
+The setup process also contains a small plugin installation and Claude Desktop configuration script.
+
+### Included tools
+
+- **run_code** — Runs a command in Roblox Studio and returns the printed output. Can be used to both make changes and retrieve information.
+- **insert_model** — Inserts a model from the Roblox marketplace into the workspace. Returns the inserted model name.
+- **get_console_output** — Gets the console output from Roblox Studio.
+- **start_stop_play** — Starts or stops play mode or runs the server.
+- **run_script_in_play_mode** — Runs a script in play mode and automatically stops play after the script finishes or times out. Returns structured output including logs, errors, and duration.
+- **get_studio_mode** — Gets the current Studio mode (`start_play`, `run_server`, or `stop`).
 
 ## Setup
 

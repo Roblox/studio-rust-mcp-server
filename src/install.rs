@@ -14,6 +14,14 @@ fn get_message(successes: String) -> String {
     format!("Roblox Studio MCP is ready to go.
 Please restart Studio and MCP clients to apply the changes.
 
+Tools included:
+- run_code
+- insert_model
+- get_console_output
+- start_stop_play
+- run_script_in_play_mode
+- get_studio_mode
+
 MCP Clients set up:
 {successes}
 
