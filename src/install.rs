@@ -30,30 +30,57 @@ To uninstall, delete the MCPStudioPlugin.rbxm from your Plugins directory.")
 }
 
 // returns OS dependant claude_desktop_config.json path
-fn get_claude_config() -> Result<PathBuf> {
-    let home_dir = env::var_os("HOME");
+fn get_claude_config() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
 
-    let config_path = if cfg!(target_os = "macos") {
-        Path::new(&home_dir.unwrap())
-            .join("Library/Application Support/Claude/claude_desktop_config.json")
+    if cfg!(target_os = "macos") {
+        if let Some(home_dir) = env::var_os("HOME") {
+            paths.push(
+                Path::new(&home_dir)
+                    .join("Library")
+                    .join("Application Support")
+                    .join("Claude")
+                    .join("claude_desktop_config.json"),
+            );
+        }
     } else if cfg!(target_os = "windows") {
-        let app_data =
-            env::var_os("APPDATA").ok_or_else(|| eyre!("Could not find APPDATA directory"))?;
-        Path::new(&app_data)
-            .join("Claude")
-            .join("claude_desktop_config.json")
-    } else {
-        return Err(eyre!("Unsupported operating system"));
-    };
+        if let Some(app_data) = env::var_os("APPDATA") {
+            paths.push(
+                Path::new(&app_data)
+                    .join("Claude")
+                    .join("claude_desktop_config.json"),
+            );
+        }
+        if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
+            let packages_dir = Path::new(&local_app_data).join("Packages");
+            if let Ok(entries) = fs::read_dir(&packages_dir) {
+                for entry in entries.flatten() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name.starts_with("Claude_") {
+                            paths.push(
+                                entry
+                                    .path()
+                                    .join("LocalCache")
+                                    .join("Roaming")
+                                    .join("Claude")
+                                    .join("claude_desktop_config.json"),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    Ok(config_path)
+    paths
 }
 
-fn get_cursor_config() -> Result<PathBuf> {
-    let home_dir = env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
-        .unwrap();
-    Ok(Path::new(&home_dir).join(".cursor").join("mcp.json"))
+fn get_cursor_config() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(home_dir) = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE")) {
+        paths.push(Path::new(&home_dir).join(".cursor").join("mcp.json"));
+    }
+    paths
 }
 
 #[cfg(target_os = "macos")]
@@ -87,45 +114,63 @@ pub fn suggest_to_config_claude_code(exe_path: &Path) -> Result<String> {
 }
 
 pub fn install_to_config(
-    config_path: Result<PathBuf>,
+    config_paths: Vec<PathBuf>,
     exe_path: &Path,
     name: &str,
 ) -> Result<String> {
-    let config_path = config_path?;
-    let mut config: serde_json::Map<String, Value> = {
-        if !config_path.exists() {
-            let mut file = File::create(&config_path).map_err(|e| {
-                eyre!("Could not create {name} config file at {config_path:?}: {e:#?}")
+    if config_paths.is_empty() {
+        return Err(eyre!("No config paths found for {name}"));
+    }
+
+    // Filter to paths whose parent directory exists
+    let valid_paths: Vec<_> = config_paths
+        .into_iter()
+        .filter(|p| p.parent().is_some_and(|dir| dir.exists()))
+        .collect();
+
+    if valid_paths.is_empty() {
+        return Err(eyre!("No valid config directories found for {name}"));
+    }
+
+    for config_path in &valid_paths {
+        let mut config: serde_json::Map<String, Value> = {
+            if !config_path.exists() {
+                let mut file = File::create(config_path).map_err(|e| {
+                    eyre!("Could not create {name} config file at {config_path:?}: {e:#?}")
+                })?;
+                file.write_all(serde_json::to_string(&serde_json::Map::new())?.as_bytes())?;
+            }
+            let config_file = File::open(config_path).map_err(|error| {
+                eyre!("Could not read or create {name} config file: {error:#?}")
             })?;
-            file.write_all(serde_json::to_string(&serde_json::Map::new())?.as_bytes())?;
+            let reader = BufReader::new(config_file);
+            serde_json::from_reader(reader)?
+        };
+
+        if !matches!(config.get("mcpServers"), Some(Value::Object(_))) {
+            config.insert("mcpServers".to_string(), json!({}));
         }
-        let config_file = File::open(&config_path)
-            .map_err(|error| eyre!("Could not read or create {name} config file: {error:#?}"))?;
-        let reader = BufReader::new(config_file);
-        serde_json::from_reader(reader)?
-    };
 
-    if !matches!(config.get("mcpServers"), Some(Value::Object(_))) {
-        config.insert("mcpServers".to_string(), json!({}));
+        // Remove old key if it exists
+        if let Some(Value::Object(mcp_servers)) = config.get_mut("mcpServers") {
+            mcp_servers.remove("Roblox Studio");
+        }
+
+        config["mcpServers"]["Roblox_Studio"] = json!({
+          "command": &exe_path,
+          "args": [
+            "--stdio"
+          ]
+        });
+
+        let mut file = File::create(config_path)?;
+        file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
+            .map_err(|e| {
+                eyre!("Could not write to {name} config file at {config_path:?}: {e:#?}")
+            })?;
+
+        println!("Installed MCP Studio plugin to {name} config {config_path:?}");
     }
-
-    // Remove old key if it exists
-    if let Some(Value::Object(mcp_servers)) = config.get_mut("mcpServers") {
-        mcp_servers.remove("Roblox Studio");
-    }
-
-    config["mcpServers"]["Roblox_Studio"] = json!({
-      "command": &exe_path,
-      "args": [
-        "--stdio"
-      ]
-    });
-
-    let mut file = File::create(&config_path)?;
-    file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
-        .map_err(|e| eyre!("Could not write to {name} config file at {config_path:?}: {e:#?}"))?;
-
-    println!("Installed MCP Studio plugin to {name} config {config_path:?}");
 
     Ok(name.to_string())
 }
