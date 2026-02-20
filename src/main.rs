@@ -49,6 +49,8 @@ async fn main() -> Result<()> {
     let server_state_clone = Arc::clone(&server_state);
     let server_handle = if let Ok(listener) = listener {
         let app = axum::Router::new()
+            .route("/register", post(rbx_studio_server::register_handler))
+            .route("/unregister", post(rbx_studio_server::unregister_handler))
             .route("/request", get(request_handler))
             .route("/response", post(response_handler))
             .route("/proxy", post(proxy_handler))

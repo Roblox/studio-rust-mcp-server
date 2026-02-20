@@ -65,6 +65,7 @@ function MockWebSocketClient.new(uri: string): MockWebSocketClient
 end
 
 local function doRequest(url: string, method: "GET" | "POST", body: any)
+	print("Doing request to", url, method, body)
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
 			Url = url,
@@ -76,11 +77,12 @@ local function doRequest(url: string, method: "GET" | "POST", body: any)
 			Compress = Enum.HttpCompression.None,
 		})
 	end)
-
+	print("Response:", response)
 	return if ok then response else nil
 end
 
 function MockWebSocketClient._OpenImpl(self: MockWebSocketClientPrivate)
+	print("Opening connection")
 	assert(self.ConnectionState == EnumWebSocketState.Connecting, "WebSocket is not in the Connecting state")
 
 	self.ConnectionState = EnumWebSocketState.Open
@@ -99,13 +101,24 @@ function MockWebSocketClient._OpenImpl(self: MockWebSocketClientPrivate)
 				end
 			end
 
-			task.wait(POLL_WAIT_TIME)
+			-- task.wait(POLL_WAIT_TIME)
+			task.defer(function()
+				print("Long polling failed, closing connection", response)
+				self:Close()
+			end)
+			return
 		end
 	end)
 end
 
 function MockWebSocketClient.Send(self: MockWebSocketClientPrivate, data: any)
-	doRequest(self._uri .. self._sendEndpoint, "POST", data)
+	local response = doRequest(self._uri .. self._sendEndpoint, "POST", data)
+	if not response or not response.Success or response.StatusCode ~= 200 then
+		print("Failed to send message, closing connection:", response)
+		self:Close()
+		return false
+	end
+	return true
 end
 
 function MockWebSocketClient.Close(self: MockWebSocketClientPrivate)

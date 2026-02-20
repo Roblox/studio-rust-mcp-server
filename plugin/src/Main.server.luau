@@ -12,8 +12,6 @@ local RunService = game:GetService("RunService")
 local StudioService = game:GetService("StudioService")
 
 local URI = "http://localhost:44755"
-local RECEIVE_ENDPOINT = "/request"
-local SEND_ENDPOINT = "/response"
 
 PluginUtils.plugin = plugin
 
@@ -51,16 +49,52 @@ end
 
 local tools = fetchBuiltinTools()
 
-local function connectWebSocket()
+local enableRetry = false
+
+local function doRequest(path: string, method: "GET" | "POST", body: any): (boolean, any)
+	local ok, response = pcall(function()
+		return HttpService:RequestAsync({
+			Url = URI .. path,
+			Method = method,
+			Headers = { ["Content-Type"] = "application/json" },
+			Body = if body then HttpService:JSONEncode(body) else nil,
+			Compress = Enum.HttpCompression.None,
+		})
+	end)
+	-- print("Client Register/Unregistration Response:", path, response)
+	if not ok or not response or not response.Success then
+		return false, nil
+	end
+	local decodeSuccess, decoded = pcall(function()
+		return HttpService:JSONDecode(response.Body)
+	end)
+	return decodeSuccess, decoded
+end
+
+local currentClientId: string? = nil
+local robloxBridgeBindable: BindableEvent = Instance.new("BindableEvent")
+
+local function connectWebSocket(): (MockWebSocketService.MockWebSocketClient?, string?)
+	local ok, registerResult = doRequest("/register", "POST", { datamodel_type = "Edit" })
+	-- print("Client Register/Unregistration Response Decoded:", registerResult)
+	if not ok or not registerResult or not registerResult.client_id then
+		warn("[MCP] Failed to register with server")
+		return nil, nil
+	end
+	local clientId: string = registerResult.client_id
+	currentClientId = clientId
+
 	local client = MockWebSocketService:CreateClient(URI)
-	client:SetReceiveEndpoint(RECEIVE_ENDPOINT)
-	client:SetSendEndpoint(SEND_ENDPOINT)
+	client:SetReceiveEndpoint("/request?client_id=" .. clientId)
+	client:SetSendEndpoint("/response?client_id=" .. clientId)
 
 	client.Opened:Once(function()
 		log("[MCP] Connection opened")
 	end)
 
 	client.Closed:Once(function()
+		currentClientId = nil
+		doRequest("/unregister", "POST", { client_id = clientId })
 		log("[MCP] Connection closed")
 	end)
 
@@ -68,7 +102,15 @@ local function connectWebSocket()
 		log("[MCP] Message received")
 
 		local body = HttpService:JSONDecode(message)
-		assert(body and body.id and body.args, "Invalid message received")
+		if not body then
+			return
+		end
+		if body.type == "roblox_event_bridge" then
+			-- Broadcast event; optionally handle body.event
+			robloxBridgeBindable:Fire(body)
+			return
+		end
+		assert(body.id and body.args, "Invalid message received")
 
 		local id: string = body.id
 		local responseSent = false
@@ -77,8 +119,10 @@ local function connectWebSocket()
 				log("[MCP] Sending response:" .. response)
 				responseSent = true
 				client:Send({
+					type = "tool_call_response",
 					id = id,
 					response = response,
+					client_id = clientId,
 				})
 			end
 		end
@@ -114,21 +158,74 @@ local function getButtonImage()
 	return ok and response or "rbxasset://textures/ui/GuiImagePlaceholder.png"
 end
 
-local currentClient: MockWebSocketService.MockWebSocketClient? = connectWebSocket() -- nil for default off
+local currentClient: MockWebSocketService.MockWebSocketClient? = nil
+local active = false
+
+local function startWebSocket()
+	enableRetry = true
+	while enableRetry do
+		print("Connecting to server...")
+		local client = connectWebSocket()
+		if client then
+			currentClient = client
+			client.Closed:Once(function()
+				if enableRetry then
+					task.spawn(function()
+						print("Connection closed, retrying in 5 seconds...")
+						task.wait(5)
+						startWebSocket()
+					end)
+				end
+			end)
+			break
+		end
+		task.wait(5)
+	end
+end
+
+local function stopWebSocket()
+	enableRetry = false
+	currentClientId = nil
+	if currentClient then
+		currentClient:Close()
+		currentClient = nil
+	end
+end
+
+startWebSocket()
 print("The MCP Studio plugin is ready for prompts.")
+
+local function testEventBridge()
+	if not currentClient then
+		return
+	end
+
+	robloxBridgeBindable.Event:Connect(function(body)
+		print("Received event:", body)
+	end)
+
+	while true do
+		print("Sending Roblox Bridge event...")
+		currentClient:Send({
+			type = "roblox_event_bridge",
+			event = "test event 1234567890",
+			client_id = currentClientId,
+		})
+		task.wait(5)
+	end
+end
+
+testEventBridge()
 
 local toolbar = plugin:CreateToolbar("MCP")
 local toggleButton = toolbar:CreateButton("Toggle MCP", "Toggle connection to the server", getButtonImage())
 toggleButton.ClickableWhenViewportHidden = true
-toggleButton:SetActive(currentClient ~= nil)
+toggleButton:SetActive(active)
 
 toggleButton.Click:Connect(function()
-	if not currentClient then
-		currentClient = connectWebSocket()
-		print("The MCP Studio plugin is ready for prompts.")
+	if active then
+		stopWebSocket()
 	else
-		currentClient:Close()
-		currentClient = nil
-		print("The MCP Studio plugin is stopped.")
+		startWebSocket()
 	end
 end)
