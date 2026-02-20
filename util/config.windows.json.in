@@ -1,6 +1,16 @@
 {
     "Endpoint": "https://eus.codesigning.azure.net",
     "CodeSigningAccountName": "SIGNING_ACCOUNT",
-    "CertificateProfileName": "SIGNING_ACCOUNT"
-  }
-  
+    "CertificateProfileName": "SIGNING_ACCOUNT",
+    "ExcludeCredentials": [
+        "ManagedIdentityCredential",
+        "WorkloadIdentityCredential",
+        "SharedTokenCacheCredential",
+        "VisualStudioCredential",
+        "VisualStudioCodeCredential",
+        "AzureCliCredential",
+        "AzurePowerShellCredential",
+        "AzureDeveloperCliCredential",
+        "InteractiveBrowserCredential"
+    ]
+}

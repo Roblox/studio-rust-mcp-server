@@ -2,7 +2,7 @@
 if ($env:SIGNING_ACCOUNT) {
     choco install dotnet-8.0-runtime --no-progress
     nuget install Microsoft.Windows.SDK.BuildTools -Version 10.0.22621.3233 -x
-    nuget install Microsoft.Trusted.Signing.Client -Version 1.0.53 -x
+    nuget install Microsoft.Trusted.Signing.Client -Version 1.0.95 -x
 
     (Get-Content .\util\config.windows.json.in) -replace "SIGNING_ACCOUNT", $env:SIGNING_ACCOUNT | Out-File -encoding ASCII .\util\config.windows.json
 
