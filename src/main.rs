@@ -3,7 +3,7 @@ use clap::Parser;
 use color_eyre::eyre::Result;
 use rbx_studio_server::*;
 use rmcp::ServiceExt;
-use std::io;
+use std::fs::File;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -25,9 +25,13 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
+    let log_file =
+        File::create("/Users/sai/Roblox/Projects/studio-rust-mcp-server/rbx-studio-mcp.log")?;
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(io::stderr)
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
+        )
+        .with_writer(std::sync::Mutex::new(log_file))
         .with_target(false)
         .with_thread_ids(true)
         .init();

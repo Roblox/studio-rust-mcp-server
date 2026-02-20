@@ -65,7 +65,7 @@ function MockWebSocketClient.new(uri: string): MockWebSocketClient
 end
 
 local function doRequest(url: string, method: "GET" | "POST", body: any)
-	print("Doing request to", url, method, body)
+	-- print("Doing request to", url, method, body)
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
 			Url = url,
@@ -77,7 +77,7 @@ local function doRequest(url: string, method: "GET" | "POST", body: any)
 			Compress = Enum.HttpCompression.None,
 		})
 	end)
-	print("Response:", response)
+	-- print("Response:", response)
 	return if ok then response else nil
 end
 

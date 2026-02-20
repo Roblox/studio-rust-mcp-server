@@ -1,5 +1,4 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
-local EventBridge = require(Main.Utils.EventBridge)
 local Types = require(Main.Types)
 
 local HttpService = game:GetService("HttpService")
@@ -118,18 +117,4 @@ local function runCodeWithOutput(command: string): string
 	return output
 end
 
-local function handleRunCode(args: Types.ToolArgs): string?
-	if not args["RunCode"] then
-		return nil
-	end
-
-	local runCodeArgs: Types.RunCodeArgs = args["RunCode"]
-	if type(runCodeArgs.command) ~= "string" then
-		error("Missing command in RunCode")
-	end
-
-	-- return runCodeWithOutput(runCodeArgs.command)
-	return EventBridge.callFunction("Server", "RunCode", runCodeArgs.command)
-end
-
-return handleRunCode :: Types.ToolFunction
+return runCodeWithOutput
