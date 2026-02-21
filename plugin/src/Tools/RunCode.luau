@@ -1,8 +1,9 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
-local EventBridge = require(Main.Utils.EventBridge)
-local Types = require(Main.Types)
-
 local HttpService = game:GetService("HttpService")
+
+local DataModelStatusMonitor = require(Main.Utils.DataModelStatusMonitor)
+local EventBridgePing = require(Main.Utils.EventBridgePing)
+local Types = require(Main.Types)
 
 local function runCodeWithOutput(command: string): string
 	local output = ""
@@ -118,18 +119,20 @@ local function runCodeWithOutput(command: string): string
 	return output
 end
 
-local function handleRunCode(args: Types.ToolArgs): string?
-	if not args["RunCode"] then
-		return nil
-	end
-
-	local runCodeArgs: Types.RunCodeArgs = args["RunCode"]
+local function handleRunCode(runCodeArgs: Types.RunCodeArgs): string?
 	if type(runCodeArgs.command) ~= "string" then
 		error("Missing command in RunCode")
 	end
 
-	-- return runCodeWithOutput(runCodeArgs.command)
-	return EventBridge.callFunction("Server", "RunCode", runCodeArgs.command)
+	-- if GlobalVariables.studioMode == "start_play" then
+	-- 	return EventBridgePing.callFunctionWithPing("Client", 2, "RunCode", runCodeArgs)
+	-- end
+
+	if DataModelStatusMonitor.getDataModelStatus("Server") then
+		return EventBridgePing.callFunctionWithPing("Server", 2, "RunCode", runCodeArgs)
+	end
+
+	return runCodeWithOutput(runCodeArgs.command)
 end
 
 return handleRunCode :: Types.ToolFunction

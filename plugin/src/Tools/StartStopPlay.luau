@@ -28,12 +28,7 @@ local function runServer(): string?
 	return "Ran server"
 end
 
-local function handleStartStopPlay(args: Types.ToolArgs): string?
-	if not args["StartStopPlay"] then
-		return nil
-	end
-
-	local startStopPlayArgs: Types.StartStopPlayArgs = args["StartStopPlay"]
+local function handleStartStopPlay(startStopPlayArgs: Types.StartStopPlayArgs): string?
 	if type(startStopPlayArgs.mode) ~= "string" then
 		error("Missing mode in StartStopPlay")
 	end

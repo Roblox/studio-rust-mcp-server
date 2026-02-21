@@ -124,12 +124,7 @@ local function runScriptInPlayMode(args: Types.RunScriptInPlayModeArgs): string?
 	return resultStr
 end
 
-local function handleRunScriptInPlayMode(args: Types.ToolArgs): string?
-	if not args["RunScriptInPlayMode"] then
-		return nil
-	end
-
-	local runScriptInPlayModeArgs: Types.RunScriptInPlayModeArgs = args["RunScriptInPlayMode"]
+local function handleRunScriptInPlayMode(runScriptInPlayModeArgs: Types.RunScriptInPlayModeArgs): string?
 	if type(runScriptInPlayModeArgs.code) ~= "string" or runScriptInPlayModeArgs.code == "" then
 		error("Missing code in RunScriptInPlayMode")
 	end

@@ -49,7 +49,7 @@ local function connectWebSocket(): (MockWebSocketService.MockWebSocketClient?, s
 	local ok, registerResult = doRequest("/register", "POST", { datamodel_type = "Edit" })
 	-- print("Client Register/Unregistration Response Decoded:", registerResult)
 	if not ok or not registerResult or not registerResult.client_id then
-		warn("[MCP] Failed to register with server")
+		warn("[MCP] Failed to register new client")
 		return nil, nil
 	end
 	local clientId: string = registerResult.client_id
@@ -202,9 +202,14 @@ local function initEventBridge(datamodel: string)
 	EventBridge.init(pubsub, datamodel)
 end
 
+local function getClient()
+	return currentClient
+end
+
 return {
 	startWebSocket = startWebSocket,
 	stopWebSocket = stopWebSocket,
 	setToolCallHandler = setToolCallHandler,
 	initEventBridge = initEventBridge,
+	getClient = getClient,
 }

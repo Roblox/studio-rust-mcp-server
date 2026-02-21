@@ -37,15 +37,15 @@ type EventBridge = {
 		source: DataModelType.DataModelType,
 		target: DataModelType.DataModelType,
 		event: string,
-		data: any
+		...any
 	) -> (),
-	fire: (target: DataModelType.DataModelType?, event: string, data: any) -> (),
+	fire: (target: DataModelType.DataModelType?, event: string, ...any) -> (),
 	registerEventHandler: (
 		callback: (
 			source: DataModelType.DataModelType,
 			target: DataModelType.DataModelType?,
 			event: string,
-			data: any
+			...any
 		) -> ()
 	) -> RBXScriptConnection,
 	registerFunction: (functionName: string, callback: (...any) -> ()) -> RBXScriptConnection,
@@ -53,15 +53,15 @@ type EventBridge = {
 		source: DataModelType.DataModelType,
 		target: DataModelType.DataModelType,
 		event: string,
-		data: any
+		...any
 	) -> (),
 	_routeFromUserToPlugin: (
 		source: DataModelType.DataModelType,
 		target: DataModelType.DataModelType,
 		event: string,
-		data: any
+		...any
 	) -> (),
-	_fireFromUser: (target: DataModelType.DataModelType?, event: string, data: any) -> (),
+	_fireFromUser: (target: DataModelType.DataModelType?, event: string, ...any) -> (),
 	callFunction: (target: DataModelType.DataModelType?, functionName: string, ...any) -> any,
 	close: () -> (),
 }
@@ -96,8 +96,8 @@ function EventBridge.init(pubsub: PubSub, datamodel: string)
 
 	pubsub:OnInvoke(
 		EventHubKey,
-		function(source: DataModelType.DataModelType, target: DataModelType.DataModelType, event: string, data: any)
-			EventBridge.callSubscribers(source, target, event, data)
+		function(source: DataModelType.DataModelType, target: DataModelType.DataModelType, event: string, ...: any)
+			EventBridge.callSubscribers(source, target, event, ...)
 		end
 	)
 end
@@ -106,27 +106,27 @@ function EventBridge.callSubscribers(
 	source: DataModelType.DataModelType,
 	target: DataModelType.DataModelType,
 	event: string,
-	data: any
+	...: any
 )
-	EventBridge.globalEvent:Fire(source, target, event, data)
+	EventBridge.globalEvent:Fire(source, target, event, ...)
 	if EventBridge.isTargetedReceiver(target) then
-		EventBridge.targetedEvent:Fire(source, target, event, data)
+		EventBridge.targetedEvent:Fire(source, target, event, ...)
 	end
 end
 
-function EventBridge.fire(target: DataModelType.DataModelType?, event: string, data: any)
-	EventBridge.pubsub:Invoke(EventHubKey, EventBridge.datamodel, target, event, data)
+function EventBridge.fire(target: DataModelType.DataModelType?, event: string, ...)
+	EventBridge.pubsub:Invoke(EventHubKey, EventBridge.datamodel, target, event, ...)
 end
 
 EventBridge.registerEventHandler = function(callback: (
 	source: DataModelType.DataModelType,
 	target: DataModelType.DataModelType?,
 	event: string,
-	data: any
-) -> ()): RBXScriptConnection
+	...any
+) -> ())
 	local connection = EventBridge.targetedEvent.Event:Connect(
-		function(source: DataModelType.DataModelType, target: DataModelType.DataModelType?, event: string, data: any)
-			callback(source, target, event, data)
+		function(source: DataModelType.DataModelType, target: DataModelType.DataModelType?, event: string, ...: any)
+			callback(source, target, event, ...)
 		end
 	)
 	return connection
