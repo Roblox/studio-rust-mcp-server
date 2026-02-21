@@ -11,7 +11,7 @@ local function handleRunCode(runCodeArgs: Types.RunCodeArgs): string?
 	end
 
 	if DataModelStatusMonitor.getDataModelStatus("Server") then
-		return EventBridgePing.callFunctionWithPing("Server", 2, "RunCode", runCodeArgs)
+		return EventBridgePing.callFunctionWithPing("Server", 2, "RunCodePlayDM", runCodeArgs)
 	end
 
 	return RunCodeImpl(runCodeArgs)
