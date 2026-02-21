@@ -69,6 +69,8 @@ To set up manually add following to your MCP Client config:
 
 On macOS the path would be something like `"/Applications/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"` if you move the app to the Applications directory.
 
+For Claude Desktop, go to Settings > Developer > Edit Config. This opens location of the  `claude_desktop_config.json`.
+
 ### Build from source
 
 To build and install the MCP reference implementation from this repository's source code:
