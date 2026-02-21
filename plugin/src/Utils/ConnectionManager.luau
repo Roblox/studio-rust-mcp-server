@@ -1,4 +1,5 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
+local DataModelType = require(Main.Utils.DataModelType)
 local EventBridge = require(Main.Utils.EventBridge)
 local MockWebSocketService = require(Main.MockWebSocketService)
 local Types = require(Main.Types)
@@ -45,8 +46,10 @@ end
 local currentClientId: string? = nil
 local robloxBridgeBindableEvent: BindableEvent = Instance.new("BindableEvent")
 
-local function connectWebSocket(): (MockWebSocketService.MockWebSocketClient?, string?)
-	local ok, registerResult = doRequest("/register", "POST", { datamodel_type = "Edit" })
+local function connectWebSocket(
+	datamodel: DataModelType.DataModelType
+): (MockWebSocketService.MockWebSocketClient?, string?)
+	local ok, registerResult = doRequest("/register", "POST", { datamodel_type = datamodel })
 	-- print("Client Register/Unregistration Response Decoded:", registerResult)
 	if not ok or not registerResult or not registerResult.client_id then
 		warn("[MCP] Failed to register new client")
@@ -101,6 +104,7 @@ local function connectWebSocket(): (MockWebSocketService.MockWebSocketClient?, s
 		local args: Types.ToolArgs = body.args
 
 		if toolCallHandler == nil then
+			warn("Tool call is not enabled for this client")
 			sendResponseOnce("Error, Tool call is not enabled for this client")
 			return
 		end
@@ -119,11 +123,11 @@ end
 
 local currentClient: MockWebSocketService.MockWebSocketClient? = nil
 
-local function startWebSocket()
+local function startWebSocket(datamodel: DataModelType.DataModelType)
 	enableRetry = true
 	while enableRetry do
 		print("Connecting to server...")
-		local client = connectWebSocket()
+		local client = connectWebSocket(datamodel)
 		if client then
 			currentClient = client
 			client.Closed:Once(function()
@@ -131,7 +135,7 @@ local function startWebSocket()
 					task.spawn(function()
 						print("Connection closed, retrying in 5 seconds...")
 						task.wait(RETRY_DELAY)
-						startWebSocket()
+						startWebSocket(datamodel)
 					end)
 				end
 			end)
@@ -197,9 +201,13 @@ function PubSub.Invoke(_self: PubSub, event: string, ...)
 	sendEventBridgeEvent(json)
 end
 
-local function initEventBridge(datamodel: string)
+local function initEventBridge(
+	datamodel: DataModelType.DataModelType,
+	hasReplicatedEventBridge: boolean,
+	isHub: boolean
+)
 	local pubsub = PubSub.new(robloxBridgeBindableEvent)
-	EventBridge.init(pubsub, datamodel)
+	EventBridge.init(pubsub, datamodel, hasReplicatedEventBridge, isHub)
 end
 
 local function getClient()

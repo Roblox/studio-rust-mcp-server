@@ -1,10 +1,10 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
-local BridgeHandlerServer = require(Main.App.RemoteHandlers.BridgeHandlerServer)
+local ServerBridgeServer = require(Main.App.RemoteHandlers.ServerBridgeServer)
 local ServerDMBridgeHandler = require(Main.App.RemoteHandlers.ServerDMBridgeHandler)
 
 return function(plugin: Plugin)
-	BridgeHandlerServer.serve("Server", ServerDMBridgeHandler.handlers)
+	ServerBridgeServer.serve("Server", ServerDMBridgeHandler.handlers)
 	plugin.Unloading:Connect(function()
-		BridgeHandlerServer.stop()
+		ServerBridgeServer.stop()
 	end)
 end

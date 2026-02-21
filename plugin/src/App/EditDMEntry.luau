@@ -52,8 +52,8 @@ return function(plugin: Plugin)
 	local function start()
 		active = true
 		ConnectionManager.setToolCallHandler(toolCallHandler)
-		ConnectionManager.initEventBridge("Edit")
-		ConnectionManager.startWebSocket()
+		ConnectionManager.initEventBridge("Edit", false, false)
+		ConnectionManager.startWebSocket("Edit")
 		DataModelStatusMonitor.start()
 		print("The MCP Studio plugin is ready for prompts.")
 	end
@@ -64,24 +64,6 @@ return function(plugin: Plugin)
 	end
 
 	start()
-
-	-- local function testEventBridge()
-	-- 	-- EventBridge.registerEventHandler(function(source, target, event, data)
-	-- 	-- 	print("Received event:", source, target, event, data)
-	-- 	-- 	return "Returning Value:" .. source .. " " .. target .. " " .. event .. " " .. data
-	-- 	-- end)
-
-	-- 	EventBridge.registerFunction("test function", function(data)
-	-- 		print("Received data:", data)
-	-- 		return "Returning_Value"
-	-- 	end)
-
-	-- 	print("Calling function...")
-	-- 	local result = EventBridge.callFunction("Edit", "test function", "test data")
-	-- 	print("Result:", result)
-	-- end
-
-	-- testEventBridge()
 
 	local toolbar = plugin:CreateToolbar("MCP")
 	local toggleButton = toolbar:CreateButton("Toggle MCP", "Toggle connection to the server", getButtonImage())

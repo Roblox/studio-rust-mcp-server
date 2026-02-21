@@ -1,7 +1,7 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
-local Types = require(Main.Types)
-
 local HttpService = game:GetService("HttpService")
+
+local Types = require(Main.Types)
 
 local function runCodeWithOutput(command: string): string
 	local output = ""
@@ -117,4 +117,8 @@ local function runCodeWithOutput(command: string): string
 	return output
 end
 
-return runCodeWithOutput
+local function handleRunCode(runCodeArgs: Types.RunCodeArgs): string?
+	return runCodeWithOutput(runCodeArgs.command)
+end
+
+return handleRunCode :: Types.ToolFunction

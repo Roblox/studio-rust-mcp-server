@@ -1,8 +1,10 @@
 local DataModelType = require(script.Parent.DataModelType)
 
+type DataModelType = DataModelType.DataModelType
+
 type EventHubData = {
-	source: DataModelType.DataModelType,
-	target: DataModelType.DataModelType?,
+	source: DataModelType,
+	target: DataModelType?,
 	event: string,
 	data: any,
 }
@@ -26,50 +28,49 @@ export type PubSub = {
 }
 
 type EventBridge = {
-	pubsub: PubSub,
-	datamodel: string,
+	pubsub: PubSub?,
+	datamodel: DataModelType,
+	isHub: boolean,
+	replicatedEventBridge: RemoteEvent,
 	globalEvent: BindableEvent,
 	targetedEvent: BindableEvent,
-	_initBindableEvent: () -> (),
-	isTargetedReceiver: (target: DataModelType.DataModelType?) -> boolean,
-	init: (pubsub: PubSub, datamodel: string) -> (),
-	callSubscribers: (
-		source: DataModelType.DataModelType,
-		target: DataModelType.DataModelType,
-		event: string,
-		...any
-	) -> (),
-	fire: (target: DataModelType.DataModelType?, event: string, ...any) -> (),
+	_initBindableEvent: (createIfNotExists: boolean) -> (),
+	isTargetedReceiver: (target: DataModelType?) -> boolean,
+	init: (pubsub: PubSub?, datamodel: DataModelType, hasReplicatedEventBridge: boolean, isHub: boolean) -> (),
+	callSubscribers: (source: DataModelType, target: DataModelType, event: string, ...any) -> (),
+	fire: (target: DataModelType?, event: string, ...any) -> (),
 	registerEventHandler: (
-		callback: (
-			source: DataModelType.DataModelType,
-			target: DataModelType.DataModelType?,
-			event: string,
-			...any
-		) -> ()
+		callback: (source: DataModelType, target: DataModelType?, event: string, ...any) -> ()
 	) -> RBXScriptConnection,
 	registerFunction: (functionName: string, callback: (...any) -> ()) -> RBXScriptConnection,
-	_routeFromPluginToUser: (
-		source: DataModelType.DataModelType,
-		target: DataModelType.DataModelType,
+	_routeFromPluginToUser: (source: DataModelType, target: DataModelType, event: string, ...any) -> (),
+	_routeFromUserToPlugin: (source: DataModelType, target: DataModelType, event: string, ...any) -> (),
+
+	_routeFromReplicatedEventToPubSub: (source: DataModelType, target: DataModelType, event: string, ...any) -> (),
+	_routeFromPubSubToReplicatedEvent: (source: DataModelType, target: DataModelType, event: string, ...any) -> (),
+	_onPubSubEvent: (source: DataModelType, target: DataModelType, event: string, ...any) -> (),
+	_fireReplicatedEvent: (
+		isFromHubToClient: boolean,
+		source: DataModelType,
+		target: DataModelType?,
 		event: string,
 		...any
 	) -> (),
-	_routeFromUserToPlugin: (
-		source: DataModelType.DataModelType,
-		target: DataModelType.DataModelType,
-		event: string,
-		...any
-	) -> (),
-	_fireFromUser: (target: DataModelType.DataModelType?, event: string, ...any) -> (),
-	callFunction: (target: DataModelType.DataModelType?, functionName: string, ...any) -> any,
+	-- _fireFromReplicatedEvent: (target: DataModelType?, event: string, ...any) -> (),
+	-- _fireFromPubSub: (target: DataModelType?, event: string, ...any) -> (),
+
+	_fireFromUser: (target: DataModelType?, event: string, ...any) -> (),
+	callFunction: (target: DataModelType?, functionName: string, ...any) -> any,
 	close: () -> (),
 }
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local EventHubKey = `AssistantEventBridge`
+local EventHubRemoteEventName = `AssistantEventHubBridge`
 local EventBridge: EventBridge = {} :: EventBridge
-local functionCallRegistry = {}
-local pendingFunctionHandlers = {}
+local functionCallRegistry = {} :: { [number]: { bindableEvent: BindableEvent, request: EventHubFunctionRequest } }
+local pendingFunctionHandlers = {} :: { [string]: { source: DataModelType, target: DataModelType?, data: any } }
 local functionInvokeId = 0
 
 local function getNextFunctionInvokeId()
@@ -77,55 +78,148 @@ local function getNextFunctionInvokeId()
 	return functionInvokeId
 end
 
-function EventBridge.isTargetedReceiver(target: DataModelType.DataModelType?)
+function EventBridge._initBindableEvent(createIfNotExists: boolean)
+	if createIfNotExists then
+		if not ReplicatedStorage:FindFirstChild(EventHubRemoteEventName) then
+			local instance = Instance.new("RemoteEvent")
+			instance.Name = EventHubRemoteEventName
+			instance.Parent = ReplicatedStorage
+		end
+		EventBridge.replicatedEventBridge = ReplicatedStorage[EventHubRemoteEventName]
+	else
+		EventBridge.replicatedEventBridge = ReplicatedStorage:WaitForChild(EventHubRemoteEventName)
+	end
+end
+
+function EventBridge.isTargetedReceiver(target: DataModelType?)
 	if target == nil then
 		return true
 	end
 	return target == EventBridge.datamodel
 end
 
-function EventBridge.init(pubsub: PubSub, datamodel: string)
+function EventBridge.init(pubsub: PubSub?, datamodel: DataModelType, hasReplicatedEventBridge: boolean, isHub: boolean)
 	if EventBridge.datamodel ~= nil then
 		warn("EventBridge already initialized, skipping initialization")
 		return
 	end
+
+	if isHub then
+		assert(hasReplicatedEventBridge and pubsub, "Hub must have replicated event bridge and pubsub")
+	end
+
+	EventBridge.isHub = isHub
 	EventBridge.pubsub = pubsub
 	EventBridge.datamodel = datamodel
 	EventBridge.globalEvent = Instance.new("BindableEvent")
 	EventBridge.targetedEvent = Instance.new("BindableEvent")
 
-	pubsub:OnInvoke(
-		EventHubKey,
-		function(source: DataModelType.DataModelType, target: DataModelType.DataModelType, event: string, ...: any)
-			EventBridge.callSubscribers(source, target, event, ...)
+	if pubsub then
+		pubsub:OnInvoke(EventHubKey, function(source: DataModelType, target: DataModelType, event: string, ...: any)
+			EventBridge._onPubSubEvent(source, target, event, ...)
+		end)
+	end
+
+	if hasReplicatedEventBridge then
+		EventBridge._initBindableEvent(isHub)
+	end
+
+	if EventBridge.replicatedEventBridge then
+		local replicatedEventBridgeHandler = function(
+			isFromHubToClient: boolean,
+			source: DataModelType,
+			target: DataModelType,
+			event: string,
+			...: any
+		)
+			if EventBridge.isHub then
+				if not isFromHubToClient then
+					EventBridge._routeFromReplicatedEventToPubSub(source, target, event, ...)
+				end
+			else
+				if isFromHubToClient then
+					EventBridge._routeFromPubSubToReplicatedEvent(source, target, event, ...)
+				end
+			end
 		end
-	)
+
+		if isHub then
+			EventBridge.replicatedEventBridge.OnServerEvent:Connect(
+				function(_player: Player, isFromHubToClient, source, target, event, ...)
+					replicatedEventBridgeHandler(isFromHubToClient, source, target, event, ...)
+				end
+			)
+		else
+			EventBridge.replicatedEventBridge.OnClientEvent:Connect(replicatedEventBridgeHandler)
+		end
+	end
 end
 
-function EventBridge.callSubscribers(
-	source: DataModelType.DataModelType,
-	target: DataModelType.DataModelType,
+EventBridge._routeFromReplicatedEventToPubSub = function(
+	source: DataModelType,
+	target: DataModelType,
 	event: string,
 	...: any
 )
+	if EventBridge.pubsub then
+		EventBridge.pubsub:Invoke(EventHubKey, source, target, event, ...)
+	end
+end
+
+EventBridge._routeFromPubSubToReplicatedEvent = function(
+	source: DataModelType,
+	target: DataModelType,
+	event: string,
+	...: any
+)
+	EventBridge.callSubscribers(source, target, event, ...)
+end
+
+function EventBridge._fireReplicatedEvent(
+	isFromHubToClient: boolean,
+	source: DataModelType,
+	target: DataModelType?,
+	event: string,
+	...: any
+)
+	if EventBridge.isHub then
+		EventBridge.replicatedEventBridge:FireAllClients(isFromHubToClient, source, target, event, ...)
+	else
+		EventBridge.replicatedEventBridge:FireServer(isFromHubToClient, source, target, event, ...)
+	end
+end
+
+function EventBridge._onPubSubEvent(source: DataModelType, target: DataModelType, event: string, ...: any)
+	EventBridge.callSubscribers(source, target, event, ...)
+	if EventBridge.isHub then
+		EventBridge._fireReplicatedEvent(true, source, target, event, ...)
+	end
+end
+
+function EventBridge.fire(target: DataModelType?, event: string, ...: any)
+	if EventBridge.pubsub then
+		EventBridge.pubsub:Invoke(EventHubKey, EventBridge.datamodel, target, event, ...)
+	end
+	if EventBridge.replicatedEventBridge then
+		EventBridge._fireReplicatedEvent(EventBridge.isHub, EventBridge.datamodel, target, event, ...)
+	end
+end
+
+function EventBridge.callSubscribers(source: DataModelType, target: DataModelType, event: string, ...: any)
 	EventBridge.globalEvent:Fire(source, target, event, ...)
 	if EventBridge.isTargetedReceiver(target) then
 		EventBridge.targetedEvent:Fire(source, target, event, ...)
 	end
 end
 
-function EventBridge.fire(target: DataModelType.DataModelType?, event: string, ...)
-	EventBridge.pubsub:Invoke(EventHubKey, EventBridge.datamodel, target, event, ...)
-end
-
 EventBridge.registerEventHandler = function(callback: (
-	source: DataModelType.DataModelType,
-	target: DataModelType.DataModelType?,
+	source: DataModelType,
+	target: DataModelType?,
 	event: string,
 	...any
 ) -> ())
 	local connection = EventBridge.targetedEvent.Event:Connect(
-		function(source: DataModelType.DataModelType, target: DataModelType.DataModelType?, event: string, ...: any)
+		function(source: DataModelType, target: DataModelType?, event: string, ...: any)
 			callback(source, target, event, ...)
 		end
 	)
@@ -134,7 +228,7 @@ end
 
 function EventBridge.registerFunction(functionName: string, callback: (...any) -> ()): RBXScriptConnection
 	return EventBridge.registerEventHandler(
-		function(source: DataModelType.DataModelType, target: DataModelType.DataModelType?, event: string, data: any)
+		function(source: DataModelType, target: DataModelType?, event: string, data: any)
 			if event == "FunctionRequest" then
 				local name = data.functionName
 				local args = data.args
@@ -167,7 +261,7 @@ function EventBridge.registerFunction(functionName: string, callback: (...any) -
 	)
 end
 
-function EventBridge.callFunction(target: DataModelType.DataModelType?, functionName: string, ...: any)
+function EventBridge.callFunction(target: DataModelType?, functionName: string, ...: any)
 	local invokeId = getNextFunctionInvokeId()
 	local request = {
 		invokeId = invokeId,
@@ -183,12 +277,7 @@ function EventBridge.callFunction(target: DataModelType.DataModelType?, function
 	}
 
 	local connection = EventBridge.registerEventHandler(
-		function(
-			responseSource: DataModelType.DataModelType,
-			responseTarget: DataModelType.DataModelType?,
-			event: string,
-			data: any
-		)
+		function(responseSource: DataModelType, responseTarget: DataModelType?, event: string, data: any)
 			if
 				responseSource == target
 				and responseTarget == EventBridge.datamodel

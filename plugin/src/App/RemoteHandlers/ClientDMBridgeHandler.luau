@@ -1,7 +1,7 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
 
 local handlers = {
-	["RunCode"] = require(Main.Tools.RunCode),
+	["RunCode"] = require(Main.ToolsImpl.RunCodeImpl),
 }
 
 return {
