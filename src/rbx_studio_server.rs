@@ -206,14 +206,12 @@ Avoid run_server unless you are sure no client/player is needed.")]
             .await
     }
 
-    #[tool(
-        description = "Get the current Studio mode. \
+    #[tool(description = "Get the current Studio mode. \
 Returns one of: start_play, run_server, or stop. \
 Guidance: call this (1) before starting Play/Server, \
 (2) when outputs stop changing / you suspect state drift, \
 or (3) after an error to confirm Studio state. If state is unexpected, \
-call start_stop_play with mode='stop' to recover, then retry."
-    )]
+call start_stop_play with mode='stop' to recover, then retry.")]
     async fn get_studio_mode(
         &self,
         Parameters(args): Parameters<GetStudioMode>,
