@@ -88,7 +88,10 @@ impl ServerHandler for RBXStudioServer {
                 website_url: None,
             },
             instructions: Some(
-                "User run_command to query data from Roblox Studio place or to change it"
+                "Use run_code to query or change the open Roblox Studio place. \
+Before starting Play/Server, or if tool execution seems stuck/out-of-sync, \
+call get_studio_mode. If the mode is not what you expect, \
+call start_stop_play with mode='stop' to recover, then proceed."
                     .to_string(),
             ),
         }
@@ -114,9 +117,9 @@ struct GetStudioMode {}
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 struct StartStopPlay {
-    #[schemars(
-        description = "Mode to start or stop, must be start_play, stop, or run_server. Don't use run_server unless you are sure no client/player is needed."
-    )]
+    #[schemars(description = "Required. One of: start_play | stop | run_server. \
+Recovery rule: if Studio is out-of-sync or a loop is stuck, prefer mode='stop' first. \
+Only use run_server if you are sure no client/player is needed.")]
     mode: String,
 }
 
@@ -179,9 +182,10 @@ impl RBXStudioServer {
             .await
     }
 
-    #[tool(
-        description = "Start or stop play mode or run the server, Don't enter run_server mode unless you are sure no client/player is needed."
-    )]
+    #[tool(description = "Start/stop Play or run Server.
+Guidance: if you need a clean run or suspect state drift, call get_studio_mode first.
+If already in start_play/run_server and you need to reset, call mode='stop' first.
+Avoid run_server unless you are sure no client/player is needed.")]
     async fn start_stop_play(
         &self,
         Parameters(args): Parameters<StartStopPlay>,
@@ -203,7 +207,12 @@ impl RBXStudioServer {
     }
 
     #[tool(
-        description = "Get the current studio mode. Returns the studio mode. The result will be one of start_play, run_server, or stop."
+        description = "Get the current Studio mode. \
+Returns one of: start_play, run_server, or stop. \
+Guidance: call this (1) before starting Play/Server, \
+(2) when outputs stop changing / you suspect state drift, \
+or (3) after an error to confirm Studio state. If state is unexpected, \
+call start_stop_play with mode='stop' to recover, then retry."
     )]
     async fn get_studio_mode(
         &self,
