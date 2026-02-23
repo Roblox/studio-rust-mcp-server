@@ -1,5 +1,4 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
-use color_eyre::owo_colors::AnsiColors::Default;
 use color_eyre::Help;
 use roblox_install::RobloxStudio;
 use serde_json::{json, Value};
