@@ -1,4 +1,5 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
+use color_eyre::owo_colors::AnsiColors::Default;
 use color_eyre::Help;
 use roblox_install::RobloxStudio;
 use serde_json::{json, Value};
@@ -157,7 +158,7 @@ pub fn install_to_config(
                 eyre!("Could not read or create {name} config file: {error:#?}")
             })?;
             let reader = BufReader::new(config_file);
-            serde_json::from_reader(reader)?
+            serde_json::from_reader(reader).unwrap_or(serde_json::Map::new())
         };
 
         if !matches!(config.get("mcpServers"), Some(Value::Object(_))) {
