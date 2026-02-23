@@ -57,7 +57,7 @@ To set up manually add following to your MCP Client config:
 ```json
 {
   "mcpServers": {
-    "Roblox Studio": {
+    "Roblox_Studio": {
       "args": [
         "--stdio"
       ],
