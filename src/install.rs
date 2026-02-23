@@ -83,6 +83,19 @@ fn get_cursor_config() -> Vec<PathBuf> {
     paths
 }
 
+fn get_antigravity_config() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(home_dir) = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE")) {
+        paths.push(
+            Path::new(&home_dir)
+                .join(".gemini")
+                .join("antigravity")
+                .join("mcp_config.json"),
+        );
+    }
+    paths
+}
+
 #[cfg(target_os = "macos")]
 fn get_exe_path() -> Result<PathBuf> {
     use core_foundation::url::CFURL;
@@ -205,6 +218,7 @@ async fn install_internal() -> Result<String> {
     let results = vec![
         install_to_config(get_claude_config(), &this_exe, "Claude"),
         install_to_config(get_cursor_config(), &this_exe, "Cursor"),
+        install_to_config(get_antigravity_config(), &this_exe, "Antigravity"),
         suggest_to_config_claude_code(&this_exe),
     ];
 
