@@ -122,12 +122,7 @@ local function insertFromMarketplace(query: string): string
 	return name
 end
 
-local function handleInsertModel(args: Types.ToolArgs): string?
-	if not args["InsertModel"] then
-		return nil
-	end
-
-	local insertModelArgs: Types.InsertModelArgs = args["InsertModel"]
+local function handleInsertModel(insertModelArgs: Types.InsertModelArgs): string?
 	if type(insertModelArgs.query) ~= "string" then
 		error("Missing query in InsertModel")
 	end
