@@ -118,17 +118,125 @@ local currentClient: MockWebSocketService.MockWebSocketClient? = connectWebSocke
 print("The MCP Studio plugin is ready for prompts.")
 
 local toolbar = plugin:CreateToolbar("MCP")
-local toggleButton = toolbar:CreateButton("Toggle MCP", "Toggle connection to the server", getButtonImage())
+local toggleButton = toolbar:CreateButton("MCP Server", "Show or hide the MCP Server panel", getButtonImage())
 toggleButton.ClickableWhenViewportHidden = true
 toggleButton:SetActive(currentClient ~= nil)
 
-toggleButton.Click:Connect(function()
-	if not currentClient then
+local widgetInfo = DockWidgetPluginGuiInfo.new(
+	Enum.InitialDockState.Right,
+	true,
+	false,
+	240,
+	80,
+	200,
+	60
+)
+local statusWidget = plugin:CreateDockWidgetPluginGui("MCPStatus", widgetInfo)
+statusWidget.Title = "MCP Status"
+statusWidget.Enabled = true
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.BackgroundTransparency = 1
+statusLabel.Size = UDim2.fromScale(1, 0.55)
+statusLabel.Font = Enum.Font.SourceSansSemibold
+statusLabel.TextSize = 18
+statusLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+statusLabel.Parent = statusWidget
+
+local segmentedContainer = Instance.new("Frame")
+segmentedContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+segmentedContainer.BackgroundTransparency = 1
+segmentedContainer.Position = UDim2.fromScale(0.5, 0.72)
+segmentedContainer.Size = UDim2.fromOffset(180, 28)
+segmentedContainer.Parent = statusWidget
+
+local segmentedLayout = Instance.new("UIListLayout")
+segmentedLayout.FillDirection = Enum.FillDirection.Horizontal
+segmentedLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+segmentedLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+segmentedLayout.Padding = UDim.new(0, 6)
+segmentedLayout.Parent = segmentedContainer
+
+local offButton = Instance.new("TextButton")
+offButton.Size = UDim2.fromOffset(84, 26)
+offButton.Font = Enum.Font.SourceSansSemibold
+offButton.TextSize = 14
+offButton.Text = "OFF"
+offButton.AutoButtonColor = false
+offButton.Parent = segmentedContainer
+
+local offCorner = Instance.new("UICorner")
+offCorner.CornerRadius = UDim.new(0, 7)
+offCorner.Parent = offButton
+
+local onButton = Instance.new("TextButton")
+onButton.Size = UDim2.fromOffset(84, 26)
+onButton.Font = Enum.Font.SourceSansSemibold
+onButton.TextSize = 14
+onButton.Text = "ON"
+onButton.AutoButtonColor = false
+onButton.Parent = segmentedContainer
+
+local onCorner = Instance.new("UICorner")
+onCorner.CornerRadius = UDim.new(0, 7)
+onCorner.Parent = onButton
+
+local function renderUIFromState(isServerOn: boolean)
+	if isServerOn then
+		onButton.BackgroundTransparency = 0
+		onButton.BackgroundColor3 = Color3.fromRGB(46, 160, 67)
+		onButton.TextColor3 = Color3.fromRGB(240, 240, 240)
+		onButton.Active = false
+
+		offButton.BackgroundTransparency = 0.6
+		offButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		offButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+		offButton.Active = true
+	else
+		offButton.BackgroundTransparency = 0
+		offButton.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+		offButton.TextColor3 = Color3.fromRGB(240, 240, 240)
+		offButton.Active = false
+
+		onButton.BackgroundTransparency = 0.6
+		onButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		onButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+		onButton.Active = true
+	end
+end
+
+local function updateStatus(isConnected: boolean)
+	toggleButton:SetActive(statusWidget.Enabled)
+	statusLabel.Text = if isConnected then "MCP Server: ON" else "MCP Server: OFF"
+	renderUIFromState(isConnected)
+end
+
+updateStatus(currentClient ~= nil)
+
+local function setConnection(isConnected: boolean)
+	if isConnected then
 		currentClient = connectWebSocket()
 		print("The MCP Studio plugin is ready for prompts.")
+		updateStatus(true)
 	else
-		currentClient:Close()
-		currentClient = nil
+		if currentClient then
+			currentClient:Close()
+			currentClient = nil
+		end
 		print("The MCP Studio plugin is stopped.")
+		updateStatus(false)
 	end
+end
+
+toggleButton.Click:Connect(function()
+	statusWidget.Enabled = not statusWidget.Enabled
+	toggleButton:SetActive(statusWidget.Enabled)
+end)
+
+offButton.MouseButton1Click:Connect(function()
+	setConnection(false)
+end)
+
+onButton.MouseButton1Click:Connect(function()
+	setConnection(true)
 end)
