@@ -192,7 +192,9 @@ impl RBXStudioServer {
 
     #[tool(
         description = "Run a script in play mode and automatically stop play after script finishes or timeout. Returns the output of the script.
-        Result format: { success: boolean, value: string, error: string, logs: { level: string, message: string, ts: number }[], errors: { level: string, message: string, ts: number }[], duration: number, isTimeout: boolean }"
+        Result format: { success: boolean, value: string, error: string, logs: { level: string, message: string, ts: number }[], errors: { level: string, message: string, ts: number }[], duration: number, isTimeout: boolean }.
+        - This tool is not available in start_play or run_server mode, must stop play mode first.
+        - Only used this tool for running one time unit test code, otherwise use start_stop_play tool."
     )]
     async fn run_script_in_play_mode(
         &self,

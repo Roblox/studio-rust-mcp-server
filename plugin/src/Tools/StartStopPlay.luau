@@ -5,13 +5,43 @@ local ConsoleOutput = require(Main.Utils.ConsoleOutput)
 local GameStopUtil = require(Main.Utils.GameStopUtil)
 local GlobalVariables = require(Main.Utils.GlobalVariables)
 
+-- If callback finishes before timeout, returns callback result, otherwise returns timeoutResult
+-- StudioTestService:ExecutePlayModeAsync({}) may error "Previous call to start play session has not been completed" immediately(still yielding) or yield until stop.
+local function callWithTimeout(callback: () -> any, timeout: number, timeoutResult: string): string?
+	local BindableEvent = Instance.new("BindableEvent")
+	local isDone = false
+	local _success = true
+	local result = timeoutResult
+
+	task.spawn(function()
+		_success, result = pcall(function()
+			return callback()
+		end)
+		if not isDone then
+			isDone = true
+			BindableEvent:Fire()
+		end
+	end)
+	task.spawn(function()
+		task.wait(timeout)
+		if not isDone then
+			isDone = true
+			BindableEvent:Fire()
+		end
+	end)
+
+	if not isDone then
+		BindableEvent.Event:Wait()
+	end
+	return result
+end
+
 local function startPlay(): string?
 	ConsoleOutput.outputMessage = ""
 	GlobalVariables.studioMode = "start_play"
-	task.spawn(function()
-		StudioTestService:ExecutePlayModeAsync({})
-	end)
-	return "Started play"
+	return callWithTimeout(function()
+		return StudioTestService:ExecutePlayModeAsync({})
+	end, 0.1, "Started play")
 end
 
 local function stop(): string?
@@ -22,10 +52,9 @@ end
 
 local function runServer(): string?
 	GlobalVariables.studioMode = "run_server"
-	task.spawn(function()
-		StudioTestService:ExecuteRunModeAsync({})
-	end)
-	return "Ran server"
+	return callWithTimeout(function()
+		return StudioTestService:ExecuteRunModeAsync({})
+	end, 0.1, "Ran server")
 end
 
 local function handleStartStopPlay(args: Types.ToolArgs): string?
