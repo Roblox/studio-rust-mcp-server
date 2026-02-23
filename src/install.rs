@@ -230,7 +230,7 @@ async fn install_internal() -> Result<String> {
 
     if successes.is_empty() {
         let error = errors.into_iter().fold(
-            eyre!("Failed to install to either Claude or Cursor"),
+            eyre!("\nFailed to automatically set up, please use manual instructions.\n"),
             |report, e| report.note(e),
         );
         return Err(error);
