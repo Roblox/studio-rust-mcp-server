@@ -52,6 +52,7 @@ end
 
 local function stop(): string?
 	GameStopUtil.stopPlay()
+	wait(1)
 	GlobalVariables.studioMode = "stop"
 	return "Stopped"
 end

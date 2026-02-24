@@ -1,6 +1,7 @@
 local Main = script:FindFirstAncestor("MCPStudioPlugin")
 local ConsoleOutput = require(Main.Utils.ConsoleOutput)
 local GlobalVariables = require(Main.Utils.GlobalVariables)
+local StartStopPlay = require(Main.Tools.StartStopPlay)
 local Types = require(Main.Types)
 
 local HttpService = game:GetService("HttpService")
@@ -134,6 +135,9 @@ local function handleRunScriptInPlayMode(runScriptInPlayModeArgs: Types.RunScrip
 			error("Timeout must be a number greater than 0 in RunScriptInPlayMode")
 		end
 	end
+
+	StartStopPlay({ mode = "stop" })
+	wait(0.2)
 
 	return runScriptInPlayMode(runScriptInPlayModeArgs)
 end
