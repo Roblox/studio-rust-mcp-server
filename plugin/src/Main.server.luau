@@ -15,6 +15,7 @@ local StudioService = game:GetService("StudioService")
 local URI = "http://localhost:44755"
 local RECEIVE_ENDPOINT = "/request"
 local SEND_ENDPOINT = "/response"
+local PLUGIN_DISABLED_SETTING_KEY = "Disabled-MCP-plugin-setting"
 
 PluginUtils.plugin = plugin
 
@@ -114,12 +115,17 @@ local function getButtonImage()
 	return ok and response or "rbxasset://textures/ui/GuiImagePlaceholder.png"
 end
 
-local currentClient: MockWebSocketService.MockWebSocketClient? = connectWebSocket() -- nil for default off
-print("The MCP Studio plugin is ready for prompts.")
-
 local toolbar = plugin:CreateToolbar("MCP")
 local toggleButton = toolbar:CreateButton("Toggle MCP", "Toggle connection to the server", getButtonImage())
 toggleButton.ClickableWhenViewportHidden = true
+
+local currentClient: MockWebSocketService.MockWebSocketClient?
+
+if not plugin:GetSetting(PLUGIN_DISABLED_SETTING_KEY) then
+	currentClient = connectWebSocket()
+	print("The MCP Studio plugin is ready for prompts.")
+end
+
 toggleButton:SetActive(currentClient ~= nil)
 
 toggleButton.Click:Connect(function()
@@ -131,4 +137,6 @@ toggleButton.Click:Connect(function()
 		currentClient = nil
 		print("The MCP Studio plugin is stopped.")
 	end
+	toggleButton:SetActive(currentClient ~= nil)
+	plugin:SetSetting(PLUGIN_DISABLED_SETTING_KEY, currentClient == nil)
 end)
