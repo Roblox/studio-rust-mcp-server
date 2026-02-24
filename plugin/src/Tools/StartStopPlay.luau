@@ -12,6 +12,7 @@ local function callWithTimeout(callback: () -> any, timeout: number, timeoutResu
 	local isDone = false
 	local _success = true
 	local result = timeoutResult
+	local isTimeout = false
 
 	task.spawn(function()
 		_success, result = pcall(function()
@@ -26,6 +27,7 @@ local function callWithTimeout(callback: () -> any, timeout: number, timeoutResu
 		task.wait(timeout)
 		if not isDone then
 			isDone = true
+			isTimeout = true
 			BindableEvent:Fire()
 		end
 	end)
@@ -33,15 +35,19 @@ local function callWithTimeout(callback: () -> any, timeout: number, timeoutResu
 	if not isDone then
 		BindableEvent.Event:Wait()
 	end
-	return result
+	return result, isTimeout
 end
 
 local function startPlay(): string?
 	ConsoleOutput.outputMessage = ""
 	GlobalVariables.studioMode = "start_play"
-	return callWithTimeout(function()
+	local result, isTimeout = callWithTimeout(function()
 		return StudioTestService:ExecutePlayModeAsync({})
 	end, 0.1, "Started play")
+	if not isTimeout then
+		return "Already in play mode"
+	end
+	return result
 end
 
 local function stop(): string?
@@ -52,17 +58,16 @@ end
 
 local function runServer(): string?
 	GlobalVariables.studioMode = "run_server"
-	return callWithTimeout(function()
+	local result, isTimeout = callWithTimeout(function()
 		return StudioTestService:ExecuteRunModeAsync({})
 	end, 0.1, "Ran server")
+	if not isTimeout then
+		return "Already in run_server mode"
+	end
+	return result
 end
 
-local function handleStartStopPlay(args: Types.ToolArgs): string?
-	if not args["StartStopPlay"] then
-		return nil
-	end
-
-	local startStopPlayArgs: Types.StartStopPlayArgs = args["StartStopPlay"]
+local function handleStartStopPlay(startStopPlayArgs: Types.StartStopPlayArgs): string?
 	if type(startStopPlayArgs.mode) ~= "string" then
 		error("Missing mode in StartStopPlay")
 	end
@@ -75,7 +80,7 @@ local function handleStartStopPlay(args: Types.ToolArgs): string?
 		return runServer()
 	end
 
-	return "Invalid mode in StartStopPlay, must be start_play, stop, or run_server"
+	error("Invalid mode in StartStopPlay, must be start_play, stop, or run_server")
 end
 
 return handleStartStopPlay :: Types.ToolFunction
