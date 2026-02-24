@@ -91,7 +91,8 @@ impl ServerHandler for RBXStudioServer {
             instructions: Some(
                 "You must aware of current studio mode before using any tools, infer the mode from conversation context or get_studio_mode.
 User run_code to query data from Roblox Studio place or to change it
-always call start_stop_play({'mode': 'stop'}) first before using run_script_in_play_mode tool.
+After calling run_script_in_play_mode, the datamodel status will be reset to stop mode.
+Prefer using start_stop_play tool instead run_script_in_play_mode, Only used run_script_in_play_mode to run one time unit test code on server datamodel.
 "
                     .to_string(),
             ),
@@ -197,8 +198,8 @@ impl RBXStudioServer {
     #[tool(
         description = "Run a script in play mode and automatically stop play after script finishes or timeout. Returns the output of the script.
         Result format: { success: boolean, value: string, error: string, logs: { level: string, message: string, ts: number }[], errors: { level: string, message: string, ts: number }[], duration: number, isTimeout: boolean }.
-        - This tool is not available in start_play or run_server mode, must stop play mode first, always call start_stop_play({'mode': 'stop'}) first before using this tool.
-        - Only used this tool for running one time unit test code, otherwise use start_stop_play tool.
+        - Prefer using start_stop_play tool instead run_script_in_play_mode, Only used run_script_in_play_mode to run one time unit test code on server datamodel.
+        - After calling run_script_in_play_mode, the datamodel status will be reset to stop mode.
         - If It returns `StudioTestService: Previous call to start play session has not been completed`, call start_stop_play tool to stop play mode first then try it again."
     )]
     async fn run_script_in_play_mode(
