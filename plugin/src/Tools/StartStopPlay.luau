@@ -62,7 +62,7 @@ local function runServer(): string?
 		return StudioTestService:ExecuteRunModeAsync({})
 	end, 0.1, "Ran server")
 	if not isTimeout then
-		return "Already in server mode"
+		return "Already in run_server mode"
 	end
 	return result
 end
