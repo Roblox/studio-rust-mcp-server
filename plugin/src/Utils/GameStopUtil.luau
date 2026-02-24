@@ -9,6 +9,7 @@ local function stopPlay()
 end
 
 local function monitorForStopPlay()
+	PluginUtils.setSettings(MCP_STOP_PLAY_MESSAGE_KEY, false)
 	while true do
 		if PluginUtils.getSettings(MCP_STOP_PLAY_MESSAGE_KEY) then
 			PluginUtils.setSettings(MCP_STOP_PLAY_MESSAGE_KEY, false)
