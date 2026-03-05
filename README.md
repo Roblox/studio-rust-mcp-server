@@ -1,3 +1,9 @@
+> [!IMPORTANT]
+> This MCP Server is no longer being actively updated. We've shifted engineering efforts to the [built-in MCP Server that ships directly with Roblox Studio](https://create.roblox.com/docs/studio/mcp), which we recommend as the primary way to connect external AI tools to Studio going forward.
+> 
+> This repository will remain available as a reference implementation. We're also working towards open-sourcing the built-in MCP Server and other mechanisms to contribute to Assistant in the future — stay tuned.
+
+
 # Quick Setup
 1. Download and Run the server: [Windows](https://github.com/Roblox/studio-rust-mcp-server/releases/latest/download/rbx-studio-mcp.exe) or [macOS](https://github.com/Roblox/studio-rust-mcp-server/releases/latest/download/macOS-rbx-studio-mcp.zip)
 2. Restart AI Client (Claude, Cursor, etc) and Roblox Studio
